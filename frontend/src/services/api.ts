@@ -55,3 +55,8 @@ export const fetchTransactions = async () => {
   const response = await axios.get(`${API_URL}/transactions`);
   return response.data;
 };
+
+export const loginUser = async (credentials: any) => {
+  const response = await axios.post(`${API_URL}/login`, credentials);
+  return response.data; // Returns { token, role }
+};

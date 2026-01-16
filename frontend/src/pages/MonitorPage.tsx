@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { fetchKitchenOrders } from "../services/api";
 import { ChefHat, Clock, Bell } from "lucide-react";
+import { io } from "socket.io-client"; // 1. Import Socket Client
 
 interface Order {
   id: number;
@@ -33,16 +34,22 @@ const MonitorPage = () => {
   };
 
   useEffect(() => {
-    loadOrders();
+    loadOrders(); // Initial Load
 
-    // 1. Refresh Orders every 3s
-    const orderInterval = setInterval(loadOrders, 3000);
+    // 2. Setup Real-Time Socket Connection
+    const socket = io("http://localhost:5000");
 
-    // 2. Update Clock every 1s
+    // 3. Listen for updates from the server
+    socket.on("orders_updated", () => {
+      console.log("🔔 New Update Received! Refreshing Monitor...");
+      loadOrders(); // Re-fetch data instantly
+    });
+
+    // 4. Update Clock every 1s (Independent of network)
     const clockInterval = setInterval(() => setTime(new Date()), 1000);
 
     return () => {
-      clearInterval(orderInterval);
+      socket.disconnect();
       clearInterval(clockInterval);
     };
   }, []);
@@ -60,7 +67,7 @@ const MonitorPage = () => {
               Order Monitor
             </h1>
             <p className="text-gray-400 text-xs tracking-[0.2em] font-bold mt-1">
-              NOW SERVING
+              STATUS BOARD
             </p>
           </div>
         </div>

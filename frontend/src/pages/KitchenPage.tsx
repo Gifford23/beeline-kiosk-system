@@ -8,11 +8,12 @@ import {
   AlertCircle,
   Flame,
   Loader2,
-  Utensils, // New Icon for Dine In
-  ShoppingBag, // New Icon for Take Out
+  Utensils,
+  ShoppingBag,
 } from "lucide-react";
 import { fetchKitchenOrders, updateStatus } from "../services/api";
 import { useNavigate } from "react-router-dom";
+import { io } from "socket.io-client"; // 1. Import Socket Client
 
 interface Order {
   id: number;
@@ -20,7 +21,7 @@ interface Order {
   status: "queued" | "preparing" | "ready";
   items: { name: string; quantity: number }[];
   created_at: string;
-  order_type: "dine-in" | "take-out"; // 1. Add this field
+  order_type: "dine-in" | "take-out";
 }
 
 const KitchenPage = () => {
@@ -42,16 +43,27 @@ const KitchenPage = () => {
   };
 
   useEffect(() => {
-    loadOrders();
-    const dataInterval = setInterval(loadOrders, 5000);
+    loadOrders(); // Initial Load
+
+    // 2. Setup Real-Time Socket Connection
+    const socket = io("http://localhost:5000");
+
+    // 3. Listen for updates
+    socket.on("orders_updated", () => {
+      loadOrders(); // Re-fetch data instantly
+    });
+
+    // Clock ticker (still needed for "5 mins ago" calculation)
     const timerInterval = setInterval(() => setCurrentTime(new Date()), 60000);
+
     return () => {
-      clearInterval(dataInterval);
+      socket.disconnect();
       clearInterval(timerInterval);
     };
   }, []);
 
   const handleStatusChange = async (id: number, newStatus: string) => {
+    // Optimistic Update
     if (newStatus === "completed") {
       setOrders(orders.filter((o) => o.id !== id));
     } else {
@@ -62,7 +74,7 @@ const KitchenPage = () => {
       );
     }
     await updateStatus(id, newStatus);
-    loadOrders();
+    // Note: The backend will emit "orders_updated" after this, causing a re-fetch
   };
 
   const handleLogout = () => {
@@ -110,18 +122,12 @@ const KitchenPage = () => {
               </h1>
               <p className="text-xs text-gray-400 font-medium uppercase tracking-widest flex items-center gap-2">
                 <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
-                Live Feed • {new Date().toLocaleTimeString()}
+                Real-Time • {new Date().toLocaleTimeString()}
               </p>
             </div>
           </div>
 
           <div className="flex gap-3">
-            <button
-              onClick={loadOrders}
-              className="flex items-center gap-2 bg-gray-700 hover:bg-gray-600 px-4 py-2 rounded-lg transition-all font-bold text-sm"
-            >
-              <RefreshCw size={16} /> Sync
-            </button>
             <button
               onClick={handleLogout}
               className="flex items-center gap-2 bg-red-900/30 text-red-400 border border-red-900/50 hover:bg-red-900/50 px-4 py-2 rounded-lg transition-all font-bold text-sm"
@@ -212,13 +218,13 @@ const KitchenPage = () => {
                     </div>
 
                     <div className="flex flex-col items-end gap-1">
-                      {/* 2. ORDER TYPE BADGE */}
+                      {/* ORDER TYPE BADGE */}
                       <div
                         className={`flex items-center gap-1 px-2 py-1 rounded text-[10px] font-black uppercase tracking-wider
                                 ${
                                   isTakeOut
-                                    ? "bg-yellow-500 text-black" // Yellow for Take Out
-                                    : "bg-blue-600 text-white" // Blue for Dine In
+                                    ? "bg-yellow-500 text-black"
+                                    : "bg-blue-600 text-white"
                                 }`}
                       >
                         {isTakeOut ? (

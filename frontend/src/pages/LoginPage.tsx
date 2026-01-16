@@ -1,65 +1,63 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Lock, ChefHat, LayoutDashboard } from "lucide-react";
+import { Lock, User } from "lucide-react";
+import { loginUser } from "../services/api"; // Import API
 
 const LoginPage = () => {
   const navigate = useNavigate();
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
-  const [role, setRole] = useState<"admin" | "kitchen">("admin");
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError("");
+    setLoading(true);
 
-    // Simple Hardcoded Security for Demo
-    if (role === "admin" && password === "admin123") {
+    try {
+      // 1. Call Backend
+      const data = await loginUser({ username, password });
+
+      // 2. Save Secure Token
+      localStorage.setItem("token", data.token);
+      localStorage.setItem("userRole", data.role);
       localStorage.setItem("isAuthenticated", "true");
-      localStorage.setItem("userRole", "admin");
-      navigate("/admin");
-    } else if (role === "kitchen" && password === "chef123") {
-      localStorage.setItem("isAuthenticated", "true");
-      localStorage.setItem("userRole", "kitchen");
-      navigate("/kitchen");
-    } else {
-      setError("Invalid Password");
+
+      // 3. Redirect based on Role
+      if (data.role === "admin") navigate("/admin");
+      else if (data.role === "kitchen") navigate("/kitchen");
+    } catch (err: any) {
+      setError("Invalid username or password");
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-gray-900 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gray-900 flex items-center justify-center p-4 font-sans">
       <div className="bg-white w-full max-w-md rounded-2xl p-8 shadow-2xl">
         <div className="text-center mb-8">
-          <h1 className="text-2xl font-bold text-gray-800">Staff Login</h1>
-          <p className="text-gray-500 text-sm">Restricted Access Only</p>
+          <h1 className="text-2xl font-bold text-gray-800">System Login</h1>
+          <p className="text-gray-500 text-sm">Authorized Personnel Only</p>
         </div>
 
         <form onSubmit={handleLogin} className="space-y-6">
-          {/* Role Selector */}
-          <div className="grid grid-cols-2 gap-4 p-1 bg-gray-100 rounded-lg">
-            <button
-              type="button"
-              onClick={() => setRole("admin")}
-              className={`flex items-center justify-center gap-2 py-2 rounded-md text-sm font-bold transition-all
-              ${
-                role === "admin"
-                  ? "bg-white shadow-sm text-brand-dark"
-                  : "text-gray-400"
-              }`}
-            >
-              <LayoutDashboard size={16} /> Admin
-            </button>
-            <button
-              type="button"
-              onClick={() => setRole("kitchen")}
-              className={`flex items-center justify-center gap-2 py-2 rounded-md text-sm font-bold transition-all
-              ${
-                role === "kitchen"
-                  ? "bg-white shadow-sm text-brand-dark"
-                  : "text-gray-400"
-              }`}
-            >
-              <ChefHat size={16} /> Kitchen
-            </button>
+          <div>
+            <label className="block text-xs font-bold text-gray-500 uppercase mb-2">
+              Username
+            </label>
+            <div className="relative">
+              <User className="absolute left-3 top-3 text-gray-400 w-5 h-5" />
+              <input
+                type="text"
+                required
+                className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-red/20 focus:border-brand-red transition-all"
+                placeholder="e.g. admin"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+              />
+            </div>
           </div>
 
           <div>
@@ -72,7 +70,7 @@ const LoginPage = () => {
                 type="password"
                 required
                 className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-red/20 focus:border-brand-red transition-all"
-                placeholder="Enter access code"
+                placeholder="••••••••"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
               />
@@ -80,13 +78,16 @@ const LoginPage = () => {
           </div>
 
           {error && (
-            <p className="text-red-500 text-sm text-center font-bold">
+            <p className="text-red-500 text-sm text-center font-bold bg-red-50 p-2 rounded">
               {error}
             </p>
           )}
 
-          <button className="w-full bg-brand-dark text-white font-bold py-4 rounded-xl hover:bg-black transition-colors">
-            Login
+          <button
+            disabled={loading}
+            className="w-full bg-brand-dark text-white font-bold py-4 rounded-xl hover:bg-black transition-colors disabled:opacity-50"
+          >
+            {loading ? "Verifying..." : "Login to Dashboard"}
           </button>
         </form>
       </div>
