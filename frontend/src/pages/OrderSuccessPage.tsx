@@ -1,73 +1,170 @@
-import React from "react";
-import { CheckCircle } from "lucide-react";
-import { useNavigate, useLocation } from "react-router-dom"; // Import useLocation
-import { motion } from "framer-motion";
+import React, { useEffect, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
+import {
+  CheckCircle,
+  ChefHat,
+  Clock,
+  ArrowRight,
+  ShoppingBag,
+  Utensils,
+} from "lucide-react";
+import { io } from "socket.io-client"; // Import Socket
+import { fetchOrderById } from "../services/api"; // Import API
 
 const OrderSuccessPage = () => {
-  const navigate = useNavigate();
   const location = useLocation();
+  const navigate = useNavigate();
 
-  // 1. Get the real queue number from the previous page
-  // If user goes here directly without ordering, show "---"
-  const queueNumber = location.state?.queueNumber || "---";
+  // Get the Order ID passed from Checkout Page
+  const { orderId } = location.state || {};
+
+  const [status, setStatus] = useState<
+    "queued" | "preparing" | "ready" | "completed"
+  >("queued");
+  const [queueNumber, setQueueNumber] = useState("...");
+  const [orderType, setOrderType] = useState("");
+
+  useEffect(() => {
+    if (!orderId) {
+      // If they refreshed and lost state, try to recover from localStorage or redirect
+      navigate("/");
+      return;
+    }
+
+    const loadStatus = async () => {
+      try {
+        const order = await fetchOrderById(orderId);
+        setStatus(order.status);
+        setQueueNumber(order.queue_number);
+        setOrderType(order.order_type);
+      } catch (error) {
+        console.error("Failed to track order");
+      }
+    };
+
+    loadStatus(); // Initial check
+
+    // ⚡ REAL-TIME TRACKING
+    const socket = io("http://localhost:5000");
+
+    socket.on("orders_updated", () => {
+      // When kitchen updates ANY order, we check ours
+      loadStatus();
+    });
+
+    return () => {
+      socket.disconnect();
+    };
+  }, [orderId, navigate]);
+
+  // Visual Steps logic
+  const steps = [
+    { id: "queued", label: "Order Placed", icon: Clock },
+    { id: "preparing", label: "Kitchen Working", icon: ChefHat },
+    { id: "ready", label: "Ready to Serve", icon: CheckCircle },
+  ];
+
+  const currentStepIndex = steps.findIndex((s) => s.id === status);
 
   return (
-    <div className="min-h-screen bg-brand-red flex flex-col items-center justify-center p-6 text-center relative overflow-hidden">
-      {/* Background Circles */}
-      <div className="absolute top-10 left-10 w-32 h-32 bg-white opacity-10 rounded-full blur-2xl"></div>
-      <div className="absolute bottom-10 right-10 w-48 h-48 bg-yellow-400 opacity-20 rounded-full blur-3xl"></div>
+    <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-6 font-sans">
+      <div className="bg-white w-full max-w-md rounded-3xl shadow-2xl overflow-hidden text-center relative">
+        {/* Top Decoration */}
+        <div
+          className={`h-2 w-full ${
+            status === "ready" ? "bg-green-500" : "bg-brand-red animate-pulse"
+          }`}
+        ></div>
 
-      <motion.div
-        initial={{ scale: 0.5, opacity: 0 }}
-        animate={{ scale: 1, opacity: 1 }}
-        transition={{ type: "spring", stiffness: 200, damping: 20 }}
-        className="bg-white w-full max-w-sm rounded-3xl p-8 shadow-2xl z-10"
-      >
-        <div className="flex justify-center mb-6">
-          <CheckCircle className="w-20 h-20 text-green-500" />
-        </div>
+        <div className="p-8">
+          <div className="inline-flex items-center justify-center w-20 h-20 bg-green-100 rounded-full mb-6">
+            <CheckCircle className="w-10 h-10 text-green-600" />
+          </div>
 
-        <h1 className="text-2xl font-bold text-brand-dark mb-2">
-          Order Confirmed!
-        </h1>
-        <p className="text-gray-500 mb-6">
-          Please wait for your number to be called.
-        </p>
-
-        <div className="bg-gray-50 rounded-xl p-6 mb-6 border-2 border-dashed border-gray-200">
-          <p className="text-sm text-gray-400 uppercase tracking-widest font-bold mb-2">
-            Queue Number
+          <h1 className="text-3xl font-black text-brand-dark mb-2">
+            Order Confirmed!
+          </h1>
+          <p className="text-gray-500 mb-6">
+            Sit tight! We'll call your number.
           </p>
-          <div className="text-5xl font-black text-brand-red tracking-tighter">
-            {queueNumber}
+
+          <div className="bg-gray-100 rounded-2xl p-6 mb-8 border border-gray-200">
+            <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">
+              Your Queue Number
+            </p>
+            <div className="text-6xl font-black text-brand-dark tracking-tighter">
+              {queueNumber}
+            </div>
+            <div className="mt-2 inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white text-xs font-bold shadow-sm">
+              {orderType === "take-out" ? (
+                <ShoppingBag size={12} />
+              ) : (
+                <Utensils size={12} />
+              )}
+              {orderType === "take-out" ? "TAKE OUT" : "DINE IN"}
+            </div>
+          </div>
+
+          {/* LIVE TRACKER STEPS */}
+          <div className="space-y-6 text-left">
+            {steps.map((step, idx) => {
+              const isCompleted = idx <= currentStepIndex;
+              const isCurrent = idx === currentStepIndex;
+
+              return (
+                <div
+                  key={step.id}
+                  className={`flex items-center gap-4 transition-all duration-500 ${
+                    isCompleted ? "opacity-100" : "opacity-30"
+                  }`}
+                >
+                  <div
+                    className={`w-10 h-10 rounded-full flex items-center justify-center transition-all
+                                ${
+                                  isCurrent
+                                    ? "bg-brand-yellow scale-110 shadow-lg ring-4 ring-yellow-100"
+                                    : isCompleted
+                                    ? "bg-green-500 text-white"
+                                    : "bg-gray-200"
+                                }`}
+                  >
+                    <step.icon
+                      size={20}
+                      className={
+                        isCurrent ? "text-brand-dark animate-bounce" : ""
+                      }
+                    />
+                  </div>
+                  <div>
+                    <h3
+                      className={`font-bold ${
+                        isCurrent ? "text-brand-dark text-lg" : "text-gray-600"
+                      }`}
+                    >
+                      {step.label}
+                    </h3>
+                    {isCurrent && (
+                      <p className="text-xs text-brand-red font-bold animate-pulse">
+                        In Progress...
+                      </p>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
 
-        {/* Status Steps */}
-        <div className="flex items-center justify-between text-xs font-bold text-gray-400 mb-8 px-4">
-          <div className="text-brand-red flex flex-col items-center gap-1">
-            <div className="w-3 h-3 bg-brand-red rounded-full"></div>
-            <span>Queued</span>
-          </div>
-          <div className="w-full h-0.5 bg-gray-200 mx-2"></div>
-          <div className="flex flex-col items-center gap-1">
-            <div className="w-3 h-3 bg-gray-200 rounded-full"></div>
-            <span>Preparing</span>
-          </div>
-          <div className="w-full h-0.5 bg-gray-200 mx-2"></div>
-          <div className="flex flex-col items-center gap-1">
-            <div className="w-3 h-3 bg-gray-200 rounded-full"></div>
-            <span>Ready</span>
-          </div>
+        {/* Footer */}
+        <div className="bg-gray-50 p-4 border-t border-gray-100">
+          <button
+            onClick={() => navigate("/")}
+            className="text-gray-400 text-sm font-bold flex items-center justify-center gap-2 hover:text-brand-dark transition-colors"
+          >
+            Start New Order <ArrowRight size={16} />
+          </button>
         </div>
-
-        <button
-          onClick={() => navigate("/menu")}
-          className="w-full bg-brand-yellow text-brand-dark font-bold py-3 rounded-xl hover:bg-yellow-400 transition-colors"
-        >
-          Order Again
-        </button>
-      </motion.div>
+      </div>
     </div>
   );
 };

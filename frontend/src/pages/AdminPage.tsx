@@ -14,8 +14,8 @@ import {
   AlertCircle,
   Receipt,
   Utensils,
-  Calendar, // New Icon
-  Filter, // New Icon
+  Filter,
+  Printer, // Added Icon
 } from "lucide-react";
 import QRCode from "react-qr-code";
 import {
@@ -27,13 +27,14 @@ import {
   fetchTransactions,
 } from "../services/api";
 import { useNavigate } from "react-router-dom";
+import { io } from "socket.io-client"; // 1. Import Socket
 
 const AdminPage = () => {
   const navigate = useNavigate();
 
   // --- View State ---
   const [activeTab, setActiveTab] = useState<"dashboard" | "menu">("dashboard");
-  const [timeFilter, setTimeFilter] = useState("today"); // 1. New Filter State
+  const [timeFilter, setTimeFilter] = useState("today");
 
   // --- Data State ---
   const [items, setItems] = useState<any[]>([]);
@@ -58,7 +59,6 @@ const AdminPage = () => {
   // --- Data Loading ---
   const loadData = async () => {
     try {
-      // 2. Pass timeFilter to fetchStats
       const [menuData, statsData, historyData] = await Promise.all([
         fetchMenu(),
         fetchStats(timeFilter),
@@ -73,14 +73,24 @@ const AdminPage = () => {
     }
   };
 
-  // 3. Reload when timeFilter changes
+  // 2. Real-Time Socket Connection
   useEffect(() => {
     loadData();
-    const interval = setInterval(loadData, 10000);
-    return () => clearInterval(interval);
-  }, [timeFilter]); // Dependency added here
 
-  // ... (Keep handleLogout, handleToggleStatus, handleDelete, handleAdd functions exactly as they were) ...
+    // Connect to Backend Socket
+    const socket = io("http://localhost:5000");
+
+    // Listen for ANY order updates (New order, Status change)
+    socket.on("orders_updated", () => {
+      console.log("⚡ Dashboard Update Received");
+      loadData(); // Refresh stats instantly
+    });
+
+    return () => {
+      socket.disconnect();
+    };
+  }, [timeFilter]); // Re-run if filter changes
+
   const handleLogout = () => {
     localStorage.removeItem("isAuthenticated");
     localStorage.removeItem("userRole");
@@ -119,8 +129,18 @@ const AdminPage = () => {
 
   return (
     <div className="min-h-screen bg-gray-50 font-sans text-brand-dark">
+      {/* 3. Print Styles (Hidden normally, Visible on Print) */}
+      <style>{`
+        @media print {
+            body * { visibility: hidden; }
+            #printable-qr, #printable-qr * { visibility: visible; }
+            #printable-qr { position: absolute; left: 0; top: 0; width: 100%; padding: 20px; background: white; }
+            .no-print { display: none !important; }
+        }
+      `}</style>
+
       {/* Global Navbar */}
-      <nav className="bg-brand-dark text-white px-6 py-4 shadow-xl sticky top-0 z-50 flex justify-between items-center">
+      <nav className="bg-brand-dark text-white px-6 py-4 shadow-xl sticky top-0 z-50 flex justify-between items-center no-print">
         <div className="flex items-center gap-3">
           <div className="bg-brand-red p-2 rounded-xl shadow-lg shadow-red-900/50">
             <LayoutDashboard size={24} />
@@ -142,34 +162,34 @@ const AdminPage = () => {
 
       <div className="max-w-7xl mx-auto p-6 lg:p-8">
         {/* Tab Navigation & Controls */}
-        <div className="flex flex-col md:flex-row justify-between items-end md:items-center mb-8 border-b border-gray-200 pb-1 gap-4">
+        <div className="flex flex-col md:flex-row justify-between items-end md:items-center mb-8 border-b border-gray-200 pb-1 gap-4 no-print">
           {/* Tabs */}
           <div className="flex gap-2">
             <button
               onClick={() => setActiveTab("dashboard")}
               className={`flex items-center gap-2 px-6 py-3 text-sm font-bold rounded-t-xl transition-all
-                    ${
-                      activeTab === "dashboard"
-                        ? "bg-white text-brand-red border-b-4 border-brand-red shadow-sm"
-                        : "text-gray-500 hover:text-brand-dark hover:bg-gray-100"
-                    }`}
+                  ${
+                    activeTab === "dashboard"
+                      ? "bg-white text-brand-red border-b-4 border-brand-red shadow-sm"
+                      : "text-gray-500 hover:text-brand-dark hover:bg-gray-100"
+                  }`}
             >
               <LayoutDashboard size={18} /> Dashboard
             </button>
             <button
               onClick={() => setActiveTab("menu")}
               className={`flex items-center gap-2 px-6 py-3 text-sm font-bold rounded-t-xl transition-all
-                    ${
-                      activeTab === "menu"
-                        ? "bg-white text-brand-red border-b-4 border-brand-red shadow-sm"
-                        : "text-gray-500 hover:text-brand-dark hover:bg-gray-100"
-                    }`}
+                  ${
+                    activeTab === "menu"
+                      ? "bg-white text-brand-red border-b-4 border-brand-red shadow-sm"
+                      : "text-gray-500 hover:text-brand-dark hover:bg-gray-100"
+                  }`}
             >
               <Utensils size={18} /> Menu Management
             </button>
           </div>
 
-          {/* 4. Date Filter Dropdown (Only visible on Dashboard) */}
+          {/* Date Filter Dropdown (Only visible on Dashboard) */}
           {activeTab === "dashboard" && (
             <div className="flex items-center gap-2 bg-white px-3 py-2 rounded-lg shadow-sm border border-gray-200">
               <Filter size={16} className="text-gray-400" />
@@ -200,21 +220,18 @@ const AdminPage = () => {
                 value={stats.activeOrders}
                 icon={<Clock className="text-brand-red" size={24} />}
                 borderColor="border-brand-red"
-                filter={timeFilter}
               />
               <StatCard
-                title={`Total Revenue (${timeFilter})`} // Update title dynamically
+                title={`Total Revenue (${timeFilter})`}
                 value={`₱${Number(stats.revenue).toLocaleString()}`}
                 icon={<DollarSign className="text-green-600" size={24} />}
                 borderColor="border-green-500"
-                filter={timeFilter}
               />
               <StatCard
                 title={`Completed (${timeFilter})`}
                 value={stats.completedOrders}
                 icon={<TrendingUp className="text-blue-500" size={24} />}
                 borderColor="border-blue-500"
-                filter={timeFilter}
               />
             </div>
 
@@ -228,13 +245,13 @@ const AdminPage = () => {
                   </h3>
                 </div>
                 <div className="flex gap-2">
-                  <span className="text-xs font-bold text-gray-400 uppercase tracking-wider bg-white px-3 py-1.5 rounded-md border border-gray-100 shadow-sm">
+                  <span className="text-xs font-bold text-gray-400 uppercase tracking-wider bg-white px-3 py-1.5 rounded-md border border-gray-100 shadow-sm flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
                     Live Feed
                   </span>
                 </div>
               </div>
 
-              {/* Table logic remains the same... */}
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-sm text-gray-600">
                   <thead className="bg-gray-50 text-xs uppercase font-bold text-gray-400">
@@ -261,9 +278,6 @@ const AdminPage = () => {
                               hour: "2-digit",
                               minute: "2-digit",
                             })}
-                          </div>
-                          <div className="text-xs text-gray-400">
-                            {new Date(order.created_at).toLocaleDateString()}
                           </div>
                         </td>
                         <td className="px-6 py-4">
@@ -303,11 +317,11 @@ const AdminPage = () => {
           </div>
         )}
 
-        {/* === MENU MANAGEMENT TAB (Same as before) === */}
+        {/* === MENU MANAGEMENT TAB === */}
         {activeTab === "menu" && (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start animate-in fade-in slide-in-from-right-4 duration-500">
             {/* Left Column: Inventory List */}
-            <div className="lg:col-span-2 space-y-6">
+            <div className="lg:col-span-2 space-y-6 no-print">
               <div className="flex items-center justify-between">
                 <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
                   <Utensils className="text-brand-dark" size={24} /> Current
@@ -335,41 +349,62 @@ const AdminPage = () => {
               {/* QR Tools */}
               <button
                 onClick={() => setShowQRGenerator(!showQRGenerator)}
-                className="w-full bg-brand-yellow text-brand-dark px-6 py-4 rounded-xl font-bold flex items-center justify-center gap-3 shadow-lg shadow-yellow-200 hover:bg-yellow-400 transition-all active:scale-95"
+                className="w-full bg-brand-yellow text-brand-dark px-6 py-4 rounded-xl font-bold flex items-center justify-center gap-3 shadow-lg shadow-yellow-200 hover:bg-yellow-400 transition-all active:scale-95 no-print"
               >
                 <Smartphone size={20} />
                 {showQRGenerator ? "Hide QR Codes" : "Generate Table QRs"}
               </button>
 
               {showQRGenerator && (
-                <div className="bg-white p-6 rounded-2xl shadow-xl border border-gray-100 animate-in fade-in slide-in-from-top-4">
-                  <h3 className="font-bold text-gray-700 mb-4 flex items-center gap-2">
-                    <Smartphone className="text-brand-red" size={18} />{" "}
-                    Printable Codes
-                  </h3>
+                <div
+                  id="printable-qr"
+                  className="bg-white p-6 rounded-2xl shadow-xl border border-gray-100 animate-in fade-in slide-in-from-top-4"
+                >
+                  <div className="flex justify-between items-center mb-4 border-b border-gray-100 pb-2">
+                    <h3 className="font-bold text-gray-700 flex items-center gap-2">
+                      <Smartphone className="text-brand-red" size={18} />
+                      Printable Codes
+                    </h3>
+                    <button
+                      onClick={() => window.print()}
+                      className="text-xs bg-gray-100 hover:bg-gray-200 px-3 py-1 rounded-md font-bold flex items-center gap-1 no-print"
+                    >
+                      <Printer size={12} /> Print
+                    </button>
+                  </div>
+
                   <div className="grid grid-cols-2 gap-4">
                     {[1, 2, 3, 4].map((n) => (
                       <div
                         key={n}
-                        className="flex flex-col items-center bg-gray-50 p-2 rounded-lg border border-dashed border-gray-300"
+                        className="flex flex-col items-center bg-gray-50 p-4 rounded-lg border-2 border-dashed border-gray-300"
                       >
-                        <div className="bg-white p-1 mb-1">
+                        <div className="bg-white p-2 mb-2 shadow-sm rounded-lg">
+                          {/* 4. Use window.location.origin for Dynamic IP */}
                           <QRCode
-                            value={`https://app.com?table=${n}`}
-                            size={60}
+                            value={`${window.location.origin}?table=${n}`}
+                            size={80}
                           />
                         </div>
-                        <span className="text-[10px] font-bold text-gray-500 uppercase">
+                        <span className="text-xs font-black text-brand-dark uppercase tracking-widest mt-1">
                           Table {n}
+                        </span>
+                        <span className="text-[10px] text-gray-400">
+                          Scan to Order
                         </span>
                       </div>
                     ))}
+                  </div>
+
+                  <div className="mt-4 p-3 bg-blue-50 text-blue-700 text-xs rounded-lg font-medium no-print">
+                    💡 Tip: Click "Print" and select your thermal printer to
+                    sticker these on tables.
                   </div>
                 </div>
               )}
 
               {/* Add Item Form */}
-              <div className="bg-white p-6 rounded-2xl shadow-lg border border-gray-100">
+              <div className="bg-white p-6 rounded-2xl shadow-lg border border-gray-100 no-print">
                 <h2 className="text-lg font-bold mb-6 text-gray-800 flex items-center gap-2">
                   <Plus className="bg-brand-dark text-white rounded-md p-1" />{" "}
                   Add New Item
@@ -422,6 +457,9 @@ const AdminPage = () => {
                         <option value="Drinks">Drinks</option>
                         <option value="Fries">Fries</option>
                         <option value="Sides">Sides</option>
+                        <option value="Steak">Steak</option>
+                        <option value="SuperMeal">Super Meal</option>
+                        <option value="SuperMeal">Family Super Meal</option>
                       </select>
                     </div>
                   </div>

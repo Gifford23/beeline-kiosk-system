@@ -60,3 +60,10 @@ export const loginUser = async (credentials: any) => {
   const response = await axios.post(`${API_URL}/login`, credentials);
   return response.data; // Returns { token, role }
 };
+
+// ... existing code ...
+
+export const fetchOrderById = async (id: number) => {
+  const response = await axios.get(`${API_URL}/orders/${id}`);
+  return response.data;
+};
