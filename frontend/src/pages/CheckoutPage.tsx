@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   ChevronLeft,
   CreditCard,
@@ -12,32 +12,39 @@ import {
 import { useNavigate } from "react-router-dom";
 import { useCart } from "../context/CartContext";
 import { placeOrder } from "../services/api";
-import PaymentModal from "../components/PaymentModal"; // 1. Import Modal
+import PaymentModal from "../components/PaymentModal";
 
 const CheckoutPage = () => {
   const navigate = useNavigate();
   const { cart, getCartTotal } = useCart();
 
+  // 1. Initialize State from LocalStorage (Memory)
   const [diningOption, setDiningOption] = useState<"dine-in" | "take-out">(
-    "dine-in"
+    () => {
+      const saved = localStorage.getItem("orderType");
+      return saved === "take-out" ? "take-out" : "dine-in";
+    }
   );
+
   const [paymentMethod, setPaymentMethod] = useState<
     "gcash" | "maya" | "card" | "counter"
   >("gcash");
 
-  // Modal State
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
 
-  // 1. Triggered when user clicks "PAY NOW"
+  // 2. Update LocalStorage if user changes their mind here
+  useEffect(() => {
+    localStorage.setItem("orderType", diningOption);
+  }, [diningOption]);
+
   const handlePaymentInitiation = () => {
     setIsPaymentModalOpen(true);
   };
 
-  // 2. Triggered when Payment Modal reports "Success"
   const handleFinalizeOrder = async () => {
-    setIsPaymentModalOpen(false); // Close modal
-    setIsProcessing(true); // Show local loading
+    setIsPaymentModalOpen(false);
+    setIsProcessing(true);
 
     try {
       const orderData = {
@@ -45,9 +52,12 @@ const CheckoutPage = () => {
         total_amount: getCartTotal(),
         payment_method: paymentMethod,
         items: cart,
+        order_type: diningOption, // 3. CRITICAL: Send this to Backend
       };
 
       const result = await placeOrder(orderData);
+
+      // Clear cart/storage after success if you want, or handle in SuccessPage
       navigate("/success", { state: { queueNumber: result.queueNumber } });
     } catch (error) {
       console.error("Order Failed:", error);
@@ -59,7 +69,6 @@ const CheckoutPage = () => {
 
   return (
     <div className="min-h-screen bg-brand-gray pb-32 font-sans">
-      {/* Payment Modal Overlay */}
       <PaymentModal
         isOpen={isPaymentModalOpen}
         onClose={() => setIsPaymentModalOpen(false)}

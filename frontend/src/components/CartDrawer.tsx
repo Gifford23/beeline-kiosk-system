@@ -3,12 +3,14 @@ import { X, Minus, Plus, Trash2, ShoppingBag, ArrowRight } from "lucide-react";
 import { useCart } from "../context/CartContext";
 import { useNavigate } from "react-router-dom";
 
+// 1. Add orderType to interface
 interface CartDrawerProps {
   isOpen: boolean;
   onClose: () => void;
+  orderType?: string; // Optional string prop
 }
 
-const CartDrawer = ({ isOpen, onClose }: CartDrawerProps) => {
+const CartDrawer = ({ isOpen, onClose, orderType }: CartDrawerProps) => {
   const { cart, removeFromCart, updateQuantity, getCartTotal } = useCart();
   const navigate = useNavigate();
 
@@ -28,7 +30,17 @@ const CartDrawer = ({ isOpen, onClose }: CartDrawerProps) => {
         <div className="p-5 flex items-center justify-between border-b border-gray-100 bg-white">
           <div className="flex items-center gap-2">
             <ShoppingBag className="w-5 h-5 text-brand-red" />
-            <h2 className="text-xl font-black text-brand-dark">My Order</h2>
+            <div>
+              <h2 className="text-xl font-black text-brand-dark leading-none">
+                My Order
+              </h2>
+              {/* 2. Display Order Type */}
+              {orderType && (
+                <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">
+                  {orderType === "take-out" ? "Take Out" : "Dine In"}
+                </span>
+              )}
+            </div>
           </div>
           <button
             onClick={onClose}
@@ -41,7 +53,6 @@ const CartDrawer = ({ isOpen, onClose }: CartDrawerProps) => {
         {/* Cart Items Area */}
         <div className="flex-1 overflow-y-auto p-5 space-y-4 bg-gray-50">
           {cart.length === 0 ? (
-            // --- EMPTY STATE (Crucial for Pro Look) ---
             <div className="h-full flex flex-col items-center justify-center text-center opacity-60">
               <ShoppingBag className="w-24 h-24 text-gray-300 mb-4" />
               <h3 className="text-xl font-bold text-gray-400">
