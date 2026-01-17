@@ -60,7 +60,6 @@ export const addMenuItem = async (itemData: any) => {
   return response.data;
 };
 
-// *Added* to match your backend capabilities
 export const updateMenuItem = async (id: number, itemData: any) => {
   const response = await api.put(`/menu/${id}`, itemData);
   return response.data;
@@ -76,8 +75,9 @@ export const deleteMenuItem = async (id: number) => {
   return response.data;
 };
 
-export const fetchStats = async () => {
-  const response = await api.get("/stats");
+// FIX: Added 'period' parameter so the Dashboard filters work!
+export const fetchStats = async (period: string = "today") => {
+  const response = await api.get(`/stats?period=${period}`);
   return response.data;
 };
 
@@ -89,9 +89,8 @@ export const fetchTransactions = async () => {
 // --- Auth & Tracking ---
 
 export const loginUser = async (credentials: any) => {
-  // NOTE: This is the only one we might want to keep as raw 'axios'
-  // to avoid sending a stale token, but using 'api' is also fine.
-  const response = await api.post("/login", credentials);
+  // IMPROVEMENT: Use raw 'axios' here to ensure no stale token is sent
+  const response = await axios.post(`${API_URL}/login`, credentials);
   return response.data;
 };
 
