@@ -4,18 +4,13 @@ import axios from "axios";
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 
 // 2. CREATE AXIOS INSTANCE
-// We use this instance ('api') instead of the default 'axios'
-// so we can apply settings (like auth headers) globally.
 const api = axios.create({
   baseURL: API_URL,
 });
 
 // 3. ADD REQUEST INTERCEPTOR
-// Before any request is sent, this code runs.
-// It checks if a token exists and adds it to the headers.
 api.interceptors.request.use(
   (config) => {
-    // This assumes you store the token in localStorage with the key "token"
     const token = localStorage.getItem("token");
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
@@ -24,7 +19,7 @@ api.interceptors.request.use(
   },
   (error) => {
     return Promise.reject(error);
-  }
+  },
 );
 
 // --- Customer Functions (Public) ---
@@ -75,7 +70,8 @@ export const deleteMenuItem = async (id: number) => {
   return response.data;
 };
 
-// FIX: Added 'period' parameter so the Dashboard filters work!
+// --- CRITICAL FIX HERE ---
+// Added 'period' parameter so the Dashboard filters actually work
 export const fetchStats = async (period: string = "today") => {
   const response = await api.get(`/stats?period=${period}`);
   return response.data;
@@ -89,7 +85,7 @@ export const fetchTransactions = async () => {
 // --- Auth & Tracking ---
 
 export const loginUser = async (credentials: any) => {
-  // IMPROVEMENT: Use raw 'axios' here to ensure no stale token is sent
+  // Use raw 'axios' to avoid sending potentially stale tokens from previous sessions
   const response = await axios.post(`${API_URL}/login`, credentials);
   return response.data;
 };
