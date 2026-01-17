@@ -1,73 +1,70 @@
-# React + TypeScript + Vite
+# 🐝 BeeLine Kiosk System
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+A full-stack, real-time food ordering system designed to streamline restaurant operations. This solution connects a self-service customer kiosk, a real-time Kitchen Display System (KDS), and an Administrative Dashboard into one cohesive platform.
 
-Currently, two official plugins are available:
+![Stack](https://img.shields.io/badge/stack-PERN-orange.svg)
+![License](https://img.shields.io/badge/license-ISC-blue.svg)
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+## 🚀 Key Features
 
-## React Compiler
+### 🖥️ Customer Kiosk
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+- **Interactive Menu:** Browse categories (Chicken, Burgers, etc.) with a modern, responsive UI.
+- **Cart & Checkout:** Seamless item addition, quantity adjustment, and order summary.
+- **Live Order Tracking:** Customers can scan a QR code to track their specific order status (Queued → Preparing → Ready) on their mobile devices in real-time.
+- **Queue Monitor:** Public display screen showing the status of all active orders.
 
-## Expanding the ESLint configuration
+### 👨‍🍳 Kitchen Display System (KDS)
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+- **Real-Time Feeds:** Orders appear instantly in the kitchen without refreshing the page (via WebSockets).
+- **Status Management:** Kitchen staff can move orders from "Queued" to "Preparing" to "Ready" to "Completed" with a single click.
+- **Visual Indicators:** Color-coded cards to indicate order urgency and status.
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+### 📊 Admin Dashboard
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
+- **Menu Management:** Add, edit, delete, or toggle availability of menu items.
+- **Sales Analytics:** View revenue, total orders, and active order counts.
+- **Transaction History:** Detailed log of all past orders.
+- **QR Code Generator:** Generate and print unique QR codes for specific tables.
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
+---
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+## 🛠️ Tech Stack
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+**Frontend:**
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+- **Framework:** React 19 (Vite)
+- **Styling:** Tailwind CSS
+- **Real-Time:** Socket.io-client
+- **HTTP Client:** Axios
+
+**Backend:**
+
+- **Runtime:** Node.js
+- **Framework:** Express.js
+- **Database:** PostgreSQL (pg)
+- **Real-Time:** Socket.io
+- **Language:** TypeScript
+
+---
+
+## ⚙️ Installation & Setup
+
+### Prerequisites
+
+- Node.js (v18 or higher)
+- PostgreSQL Database
+- Git
+
+### 1. Database Setup
+
+Ensure you have a PostgreSQL database running. You will need the connection string (URL) for the next steps.
+
+### 2. Backend Setup
+
+Navigate to the backend folder and install dependencies:
+
+```bash
+cd backend
+npm install
 ```
