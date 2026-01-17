@@ -36,36 +36,45 @@ const OrderSuccessPage = () => {
   const location = useLocation();
   const [searchParams] = useSearchParams();
 
-  // 1. Get Order ID
+  // 1. Get Order ID: Prioritize State (Checkout), fallback to URL (QR Scan)
   const orderId = location.state?.orderId || searchParams.get("id");
 
   const [order, setOrder] = useState<OrderDetails | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  // Check if viewing on mobile
+  // Check if viewing on mobile (via QR link)
   const isMobileView = !location.state?.orderId && !!searchParams.get("id");
 
   useEffect(() => {
+    // Safety Check: If no ID, redirect home after a delay
     if (!orderId) {
-      setTimeout(() => navigate("/"), 2000);
-      return;
+      console.warn("No Order ID found. Redirecting...");
+      const timer = setTimeout(() => navigate("/"), 3000);
+      return () => clearTimeout(timer);
     }
 
     const loadData = async () => {
       try {
         const data = await fetchOrderById(Number(orderId));
-        if (data) setOrder(data);
-        else setError("Ticket not found.");
+        if (data) {
+          setOrder(data);
+        } else {
+          setError("Ticket not found in database.");
+        }
       } catch (err) {
-        setError("Connection failed.");
+        console.error("Failed to load ticket:", err);
+        setError("Connection failed. Could not load ticket.");
       } finally {
+        // Ensure loading stops so the UI appears
         setLoading(false);
       }
     };
 
+    // Initial Load
     loadData();
 
+    // Listen for updates (e.g. Status changes)
     const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
     const socket = io(API_URL.replace("/api", ""));
     socket.on("orders_updated", () => loadData());
@@ -75,44 +84,71 @@ const OrderSuccessPage = () => {
     };
   }, [orderId, navigate]);
 
-  // --- LOADING / ERROR STATES ---
-  if (loading)
+  // --- 1. PROFESSIONAL LOADER ---
+  if (loading) {
     return (
-      <div className="min-h-screen bg-zinc-900 flex flex-col items-center justify-center p-4">
-        <Loader2 className="animate-spin text-brand-yellow mb-4" size={48} />
-        <p className="text-white font-bold tracking-widest uppercase">
-          Printing Ticket...
-        </p>
+      <div className="min-h-screen bg-zinc-950 flex flex-col items-center justify-center relative overflow-hidden font-sans">
+        {/* Background Glow */}
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-yellow-900/20 via-zinc-950 to-zinc-950"></div>
+
+        <div className="relative z-10 flex flex-col items-center">
+          {/* Animated Icon Container */}
+          <div className="w-24 h-24 bg-zinc-900 rounded-full flex items-center justify-center border-4 border-brand-yellow shadow-2xl shadow-yellow-500/20 animate-bounce">
+            <Receipt size={48} className="text-brand-yellow" />
+          </div>
+
+          <h2 className="mt-8 text-2xl font-black text-white uppercase tracking-widest">
+            Generating Ticket
+          </h2>
+
+          {/* Custom Dots Animation */}
+          <div className="mt-4 flex gap-2">
+            <span className="w-3 h-3 bg-brand-yellow rounded-full animate-bounce [animation-delay:-0.3s]"></span>
+            <span className="w-3 h-3 bg-brand-yellow rounded-full animate-bounce [animation-delay:-0.15s]"></span>
+            <span className="w-3 h-3 bg-brand-yellow rounded-full animate-bounce"></span>
+          </div>
+
+          <p className="mt-6 text-zinc-500 text-xs font-bold uppercase tracking-[0.2em]">
+            Please wait a moment...
+          </p>
+        </div>
       </div>
     );
+  }
 
-  if (error || !order)
+  // --- ERROR STATE ---
+  if (error || !order) {
     return (
       <div className="min-h-screen bg-zinc-900 flex flex-col items-center justify-center p-6 text-center text-white">
-        <AlertCircle className="text-red-500 mb-4" size={64} />
+        <div className="bg-red-500/10 p-6 rounded-full mb-6">
+          <AlertCircle className="text-red-500" size={64} />
+        </div>
         <h1 className="text-2xl font-black uppercase tracking-tight">
-          Ticket Not Found
+          Ticket Error
         </h1>
-        <p className="text-gray-400 mb-8 mt-2">
-          We couldn't locate your order details.
+        <p className="text-gray-400 mb-8 mt-2 max-w-xs mx-auto">
+          {error || "We couldn't locate your order details."}
         </p>
         <button
           onClick={() => navigate("/")}
-          className="bg-white text-black px-8 py-3 rounded-full font-bold"
+          className="bg-white text-black px-8 py-3 rounded-xl font-bold hover:bg-gray-200 transition-colors"
         >
-          Return Home
+          Return to Menu
         </button>
       </div>
     );
+  }
 
+  // Calculations
   const safeTotal = Number(order.total_amount) || 0;
   const subtotal = safeTotal / 1.12;
   const vat = safeTotal - subtotal;
   const isPaid = order.payment_method !== "counter";
 
+  // --- MAIN RECEIPT UI ---
   return (
-    <div className="min-h-screen bg-zinc-900 font-sans py-8 px-4 flex flex-col items-center justify-center relative overflow-hidden">
-      {/* --- BACKGROUND DECORATION (The "Proper Background") --- */}
+    <div className="min-h-screen bg-zinc-900 font-sans py-8 px-4 flex flex-col items-center justify-center relative overflow-hidden animate-in fade-in zoom-in duration-500">
+      {/* Background Decoration */}
       <div className="absolute inset-0 opacity-10 pointer-events-none">
         <div className="absolute top-10 left-10 transform -rotate-12">
           <Utensils size={150} className="text-white" />
@@ -120,6 +156,7 @@ const OrderSuccessPage = () => {
         <div className="absolute bottom-20 right-10 transform rotate-12">
           <ShoppingBag size={150} className="text-white" />
         </div>
+        {/* Central Glow */}
         <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-brand-red rounded-full blur-[120px] opacity-20"></div>
       </div>
 
@@ -135,7 +172,6 @@ const OrderSuccessPage = () => {
                 box-shadow: none;
             }
             .no-print { display: none !important; }
-            /* Hide the decorative zigzag on print to save ink/render logic */
             .zigzag-bottom { display: none; }
         }
       `}</style>
@@ -152,15 +188,15 @@ const OrderSuccessPage = () => {
 
           {/* HEADER */}
           <div className="p-8 text-center pb-6">
-            <div className="inline-flex items-center justify-center w-16 h-16 bg-zinc-100 rounded-full mb-4 text-brand-dark">
+            <div className="inline-flex items-center justify-center w-16 h-16 bg-zinc-100 rounded-full mb-4 text-brand-dark shadow-inner">
               <ChefHat size={32} />
             </div>
             <h1 className="text-3xl font-black tracking-tight uppercase mb-1 text-brand-dark">
-              BEELINE FOODS
+              Jollibee
             </h1>
             <div className="flex flex-col gap-1 text-[10px] text-gray-500 font-bold uppercase tracking-widest mt-2">
               <span className="flex items-center justify-center gap-1">
-                <MapPin size={10} /> 123 Ayala Ave, Makati City
+                <MapPin size={10} /> Masterson Ave, Cagayan de Oro City
               </span>
               <span className="flex items-center justify-center gap-1">
                 <Clock size={10} />{" "}
@@ -181,7 +217,7 @@ const OrderSuccessPage = () => {
             <p className="text-xs font-bold text-gray-400 uppercase tracking-[0.2em] mb-2">
               Queue Number
             </p>
-            <div className="text-7xl font-black text-brand-dark tracking-tighter leading-none mb-4">
+            <div className="text-6xl font-black text-brand-dark tracking-tighter leading-none mb-4">
               {order.queue_number}
             </div>
 
@@ -266,7 +302,7 @@ const OrderSuccessPage = () => {
           </div>
         </div>
 
-        {/* ZIGZAG BOTTOM (Paper Tear Effect using CSS) */}
+        {/* ZIGZAG BOTTOM (Paper Tear Effect) */}
         <div
           className="w-full h-4 bg-white relative zigzag-bottom no-print"
           style={{
