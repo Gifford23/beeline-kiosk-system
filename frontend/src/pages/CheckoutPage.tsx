@@ -8,17 +8,20 @@ import {
   Loader2,
   Utensils,
   Receipt,
+  CheckCircle,
+  Smartphone,
+  Wallet,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useCart } from "../context/CartContext";
-import { placeOrder } from "../services/api";
-import PaymentModal from "../components/PaymentModal";
+import { createOrder } from "../services/api"; // Updated Import
+import toast from "react-hot-toast";
 
 const CheckoutPage = () => {
   const navigate = useNavigate();
   const { cart, getCartTotal } = useCart();
 
-  // 1. Initialize State from LocalStorage (Memory)
+  // 1. Initialize Dining Option
   const [diningOption, setDiningOption] = useState<"dine-in" | "take-out">(
     () => {
       const saved = localStorage.getItem("orderType");
@@ -26,57 +29,87 @@ const CheckoutPage = () => {
     }
   );
 
+  // 2. Payment Methods (Jollibee Standard)
   const [paymentMethod, setPaymentMethod] = useState<
-    "gcash" | "maya" | "card" | "counter"
-  >("gcash");
+    "card" | "gcash" | "maya" | "counter"
+  >("card");
 
-  const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+  // Payment Flow State
   const [isProcessing, setIsProcessing] = useState(false);
+  const [paymentStep, setPaymentStep] = useState<
+    "idle" | "processing" | "approved"
+  >("idle");
 
-  // 2. Update LocalStorage if user changes their mind here
   useEffect(() => {
     localStorage.setItem("orderType", diningOption);
   }, [diningOption]);
 
-  const handlePaymentInitiation = () => {
-    setIsPaymentModalOpen(true);
-  };
+  const total = getCartTotal();
+  const tax = total * 0.12; // VAT Calculation
 
-  const handleFinalizeOrder = async () => {
-    setIsPaymentModalOpen(false);
-    setIsProcessing(true);
-
-    try {
-      const orderData = {
-        customer_name: "Guest User",
-        total_amount: getCartTotal(),
-        payment_method: paymentMethod,
-        items: cart,
-        order_type: diningOption, // 3. CRITICAL: Send this to Backend
-      };
-
-      const result = await placeOrder(orderData);
-
-      // Clear cart/storage after success if you want, or handle in SuccessPage
-      navigate("/success", { state: { queueNumber: result.queueNumber } });
-    } catch (error) {
-      console.error("Order Failed:", error);
-      alert("Failed to place order. Please try again.");
-    } finally {
-      setIsProcessing(false);
+  const handlePayNow = async () => {
+    if (cart.length === 0) {
+      toast.error("Your cart is empty!");
+      return;
     }
+
+    // A. Start Payment Flow
+    setIsProcessing(true);
+    setPaymentStep("processing");
+
+    // B. Simulate Bank Delay (2.5 Seconds)
+    setTimeout(async () => {
+      try {
+        // C. Show "Approved" State
+        setPaymentStep("approved");
+
+        // Wait 1.5 seconds for user to see the checkmark
+        setTimeout(async () => {
+          // D. Create Order in Backend
+          const orderData = {
+            customer_name: "Guest User",
+            total_amount: total,
+            items: cart.map((item) => ({
+              id: item.id,
+              quantity: item.quantity,
+              price: item.price,
+            })),
+            order_type: diningOption,
+            payment_method: paymentMethod,
+          };
+
+          const result = await createOrder(orderData);
+
+          // E. Redirect to Success Page
+          navigate("/order-success", { state: { orderId: result.orderId } });
+        }, 1500);
+      } catch (error) {
+        console.error("Payment failed", error);
+        toast.error("Payment failed. Please try again.");
+        setIsProcessing(false);
+        setPaymentStep("idle");
+      }
+    }, 2500);
   };
+
+  if (cart.length === 0) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 text-center p-6">
+        <h2 className="text-2xl font-bold text-gray-400 mb-4">
+          Your bag is empty
+        </h2>
+        <button
+          onClick={() => navigate("/")}
+          className="text-brand-dark font-bold underline"
+        >
+          Go back to menu
+        </button>
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-brand-gray pb-32 font-sans">
-      <PaymentModal
-        isOpen={isPaymentModalOpen}
-        onClose={() => setIsPaymentModalOpen(false)}
-        amount={getCartTotal()}
-        method={paymentMethod}
-        onPaymentSuccess={handleFinalizeOrder}
-      />
-
+    <div className="min-h-screen bg-brand-gray pb-32 font-sans relative animate-in fade-in">
       {/* Header */}
       <div className="bg-white px-6 py-4 flex items-center gap-4 shadow-sm sticky top-0 z-20">
         <button
@@ -130,38 +163,61 @@ const CheckoutPage = () => {
               <CreditCard className="w-5 h-5 text-brand-red" /> Payment Method
             </h2>
             <div className="space-y-3">
-              {/* GCash */}
+              {/* 1. Card Payment */}
               <div
-                onClick={() => setPaymentMethod("gcash")}
+                onClick={() => setPaymentMethod("card")}
                 className={`p-4 rounded-2xl border-2 flex items-center justify-between cursor-pointer transition-all
                   ${
-                    paymentMethod === "gcash"
+                    paymentMethod === "card"
                       ? "border-blue-500 bg-blue-50/30 shadow-md"
                       : "border-transparent bg-white hover:bg-gray-50"
                   }`}
               >
                 <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 bg-blue-500 rounded-xl flex items-center justify-center text-white font-bold text-xs shadow-md">
-                    GCash
+                  <div className="w-12 h-12 bg-blue-500 rounded-xl flex items-center justify-center text-white shadow-md">
+                    <CreditCard className="w-6 h-6" />
+                  </div>
+                  <span className="font-bold text-brand-dark text-lg">
+                    Credit / Debit Card
+                  </span>
+                </div>
+                <div
+                  className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${paymentMethod === "card" ? "border-blue-500" : "border-gray-300"}`}
+                >
+                  {paymentMethod === "card" && (
+                    <div className="w-3 h-3 rounded-full bg-blue-500" />
+                  )}
+                </div>
+              </div>
+
+              {/* 2. GCash */}
+              <div
+                onClick={() => setPaymentMethod("gcash")}
+                className={`p-4 rounded-2xl border-2 flex items-center justify-between cursor-pointer transition-all
+                  ${
+                    paymentMethod === "gcash"
+                      ? "border-blue-400 bg-blue-50/50 shadow-md"
+                      : "border-transparent bg-white hover:bg-gray-50"
+                  }`}
+              >
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 bg-[#007DFE] rounded-xl flex items-center justify-center text-white shadow-md">
+                    <Smartphone className="w-6 h-6" />
                   </div>
                   <span className="font-bold text-brand-dark text-lg">
                     GCash
                   </span>
                 </div>
                 <div
-                  className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${
-                    paymentMethod === "gcash"
-                      ? "border-blue-500"
-                      : "border-gray-300"
-                  }`}
+                  className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${paymentMethod === "gcash" ? "border-[#007DFE]" : "border-gray-300"}`}
                 >
                   {paymentMethod === "gcash" && (
-                    <div className="w-3 h-3 rounded-full bg-blue-500" />
+                    <div className="w-3 h-3 rounded-full bg-[#007DFE]" />
                   )}
                 </div>
               </div>
 
-              {/* Maya */}
+              {/* 3. Maya */}
               <div
                 onClick={() => setPaymentMethod("maya")}
                 className={`p-4 rounded-2xl border-2 flex items-center justify-between cursor-pointer transition-all
@@ -172,19 +228,15 @@ const CheckoutPage = () => {
                   }`}
               >
                 <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 bg-green-500 rounded-xl flex items-center justify-center text-white font-bold text-xs shadow-md">
-                    Maya
+                  <div className="w-12 h-12 bg-black rounded-xl flex items-center justify-center text-green-400 shadow-md border border-green-500">
+                    <Wallet className="w-6 h-6" />
                   </div>
                   <span className="font-bold text-brand-dark text-lg">
                     Maya
                   </span>
                 </div>
                 <div
-                  className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${
-                    paymentMethod === "maya"
-                      ? "border-green-500"
-                      : "border-gray-300"
-                  }`}
+                  className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${paymentMethod === "maya" ? "border-green-500" : "border-gray-300"}`}
                 >
                   {paymentMethod === "maya" && (
                     <div className="w-3 h-3 rounded-full bg-green-500" />
@@ -192,7 +244,7 @@ const CheckoutPage = () => {
                 </div>
               </div>
 
-              {/* Counter */}
+              {/* 4. Pay at Counter */}
               <div
                 onClick={() => setPaymentMethod("counter")}
                 className={`p-4 rounded-2xl border-2 flex items-center justify-between cursor-pointer transition-all
@@ -211,11 +263,7 @@ const CheckoutPage = () => {
                   </span>
                 </div>
                 <div
-                  className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${
-                    paymentMethod === "counter"
-                      ? "border-brand-yellow"
-                      : "border-gray-300"
-                  }`}
+                  className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${paymentMethod === "counter" ? "border-brand-yellow" : "border-gray-300"}`}
                 >
                   {paymentMethod === "counter" && (
                     <div className="w-3 h-3 rounded-full bg-brand-yellow" />
@@ -247,7 +295,7 @@ const CheckoutPage = () => {
                   <span className="font-bold text-gray-700">{item.name}</span>
                 </div>
                 <span className="font-bold text-gray-900">
-                  ₱{item.price * item.quantity}
+                  ₱{(item.price * item.quantity).toFixed(2)}
                 </span>
               </div>
             ))}
@@ -256,23 +304,23 @@ const CheckoutPage = () => {
           <div className="border-t-2 border-dashed border-gray-200 py-4 space-y-2">
             <div className="flex justify-between text-gray-500 text-sm">
               <span>Subtotal</span>
-              <span>₱{getCartTotal()}</span>
+              <span>₱{(total - tax).toFixed(2)}</span>
             </div>
             <div className="flex justify-between text-gray-500 text-sm">
-              <span>Service Fee</span>
-              <span>₱0.00</span>
+              <span>VAT (12%)</span>
+              <span>₱{tax.toFixed(2)}</span>
             </div>
           </div>
 
           <div className="bg-brand-gray p-4 rounded-xl flex justify-between items-center mb-6">
             <span className="font-bold text-gray-600">Total to Pay</span>
             <span className="text-3xl font-black text-brand-red">
-              ₱{getCartTotal()}
+              ₱{total.toFixed(2)}
             </span>
           </div>
 
           <button
-            onClick={handlePaymentInitiation}
+            onClick={handlePayNow}
             disabled={isProcessing}
             className="w-full bg-brand-red text-white py-5 rounded-2xl font-black text-xl shadow-lg shadow-red-200 hover:bg-red-700 hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-3"
           >
@@ -287,6 +335,44 @@ const CheckoutPage = () => {
           </button>
         </div>
       </div>
+
+      {/* --- PAYMENT MODAL OVERLAY --- */}
+      {isProcessing && (
+        <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-white rounded-3xl p-10 max-w-sm w-full text-center shadow-2xl border-4 border-gray-100">
+            {paymentStep === "processing" && (
+              <div className="py-8 flex flex-col items-center">
+                <Loader2
+                  size={64}
+                  className="text-brand-yellow animate-spin mb-8"
+                />
+                <h3 className="text-2xl font-black text-gray-800 mb-2">
+                  Processing...
+                </h3>
+                <p className="text-gray-500 font-medium">
+                  {paymentMethod === "counter"
+                    ? "Printing Ticket..."
+                    : "Connecting to Bank..."}
+                </p>
+              </div>
+            )}
+
+            {paymentStep === "approved" && (
+              <div className="py-8 flex flex-col items-center animate-in zoom-in duration-300">
+                <div className="w-24 h-24 bg-green-100 rounded-full flex items-center justify-center mb-6 text-green-600 shadow-lg shadow-green-100">
+                  <CheckCircle size={48} strokeWidth={3} />
+                </div>
+                <h3 className="text-2xl font-black text-gray-800 mb-2">
+                  {paymentMethod === "counter"
+                    ? "Ticket Printed!"
+                    : "Payment Approved!"}
+                </h3>
+                <p className="text-gray-500 font-medium">Redirecting...</p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 };

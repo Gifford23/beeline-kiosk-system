@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from "react";
 import {
-  RefreshCw,
   ChefHat,
   LogOut,
   Clock,
@@ -10,11 +9,14 @@ import {
   Loader2,
   Utensils,
   ShoppingBag,
+  CreditCard, // Added Icon
+  Banknote, // Added Icon
 } from "lucide-react";
 import { fetchKitchenOrders, updateStatus } from "../services/api";
 import { useNavigate } from "react-router-dom";
-import { io } from "socket.io-client"; // 1. Import Socket Client
+import { io } from "socket.io-client";
 
+// 1. Update Interface to include Payment details
 interface Order {
   id: number;
   queue_number: string;
@@ -22,6 +24,8 @@ interface Order {
   items: { name: string; quantity: number }[];
   created_at: string;
   order_type: "dine-in" | "take-out";
+  payment_status: "paid" | "pending"; // New Field
+  payment_method: "card" | "cash"; // New Field
 }
 
 const KitchenPage = () => {
@@ -43,17 +47,20 @@ const KitchenPage = () => {
   };
 
   useEffect(() => {
-    loadOrders(); // Initial Load
+    loadOrders();
 
-    // 2. Setup Real-Time Socket Connection
-    const socket = io("http://localhost:5000");
+    // 2. Dynamic Socket URL (Works on localhost AND Railway)
+    // We strip "/api" from the API URL to get the root server URL
+    const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
+    const SOCKET_URL = API_URL.replace("/api", "");
 
-    // 3. Listen for updates
+    const socket = io(SOCKET_URL);
+
     socket.on("orders_updated", () => {
-      loadOrders(); // Re-fetch data instantly
+      console.log("🔔 New Order Received!");
+      loadOrders();
     });
 
-    // Clock ticker (still needed for "5 mins ago" calculation)
     const timerInterval = setInterval(() => setCurrentTime(new Date()), 60000);
 
     return () => {
@@ -63,7 +70,6 @@ const KitchenPage = () => {
   }, []);
 
   const handleStatusChange = async (id: number, newStatus: string) => {
-    // Optimistic Update
     if (newStatus === "completed") {
       setOrders(orders.filter((o) => o.id !== id));
     } else {
@@ -74,7 +80,6 @@ const KitchenPage = () => {
       );
     }
     await updateStatus(id, newStatus);
-    // Note: The backend will emit "orders_updated" after this, causing a re-fetch
   };
 
   const handleLogout = () => {
@@ -184,6 +189,7 @@ const KitchenPage = () => {
               const elapsed = getElapsedMinutes(order.created_at);
               const isUrgent = elapsed > 15;
               const isTakeOut = order.order_type === "take-out";
+              const isPaid = order.payment_status === "paid";
 
               return (
                 <div
@@ -212,13 +218,31 @@ const KitchenPage = () => {
                       <h2 className="text-4xl font-black text-white leading-none tracking-tighter">
                         {order.queue_number}
                       </h2>
-                      <p className="text-xs text-gray-500 mt-1 font-mono uppercase tracking-widest">
-                        #{order.id.toString().padStart(4, "0")}
-                      </p>
+                      <div className="flex items-center gap-2 mt-1">
+                        <p className="text-xs text-gray-500 font-mono uppercase tracking-widest">
+                          #{order.id.toString().padStart(4, "0")}
+                        </p>
+                      </div>
                     </div>
 
                     <div className="flex flex-col items-end gap-1">
-                      {/* ORDER TYPE BADGE */}
+                      {/* 3. NEW: Payment Badge */}
+                      <div
+                        className={`flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider border ${
+                          isPaid
+                            ? "bg-green-900/30 text-green-400 border-green-900/50"
+                            : "bg-red-900/30 text-red-400 border-red-900/50"
+                        }`}
+                      >
+                        {order.payment_method === "card" ? (
+                          <CreditCard size={10} />
+                        ) : (
+                          <Banknote size={10} />
+                        )}
+                        {isPaid ? "PAID" : "UNPAID"}
+                      </div>
+
+                      {/* Order Type Badge */}
                       <div
                         className={`flex items-center gap-1 px-2 py-1 rounded text-[10px] font-black uppercase tracking-wider
                                 ${

@@ -1,6 +1,7 @@
 import axios from "axios";
 
-const API_URL = "http://localhost:5000/api";
+// 1. Dynamic URL: Uses Railway URL in production, localhost in dev
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 
 // --- Customer Functions ---
 
@@ -9,7 +10,8 @@ export const fetchMenu = async () => {
   return response.data;
 };
 
-export const placeOrder = async (orderData: any) => {
+// 2. FIX: Renamed to 'createOrder' to match CheckoutPage logic
+export const createOrder = async (orderData: any) => {
   const response = await axios.post(`${API_URL}/orders`, orderData);
   return response.data;
 };
@@ -50,7 +52,6 @@ export const fetchStats = async () => {
   return response.data;
 };
 
-// --- 1. ADD THIS MISSING FUNCTION ---
 export const fetchTransactions = async () => {
   const response = await axios.get(`${API_URL}/transactions`);
   return response.data;
@@ -58,10 +59,10 @@ export const fetchTransactions = async () => {
 
 export const loginUser = async (credentials: any) => {
   const response = await axios.post(`${API_URL}/login`, credentials);
-  return response.data; // Returns { token, role }
+  return response.data;
 };
 
-// ... existing code ...
+// --- Order Tracking ---
 
 export const fetchOrderById = async (id: number) => {
   const response = await axios.get(`${API_URL}/orders/${id}`);
