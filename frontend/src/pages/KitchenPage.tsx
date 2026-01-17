@@ -11,11 +11,13 @@ import {
   ShoppingBag,
   CreditCard,
   Banknote,
-  Volume2, // Added Icon for Audio
+  Volume2,
+  RefreshCw, // Added Refresh Icon
 } from "lucide-react";
 import { fetchKitchenOrders, updateStatus } from "../services/api";
 import { useNavigate } from "react-router-dom";
 import { io } from "socket.io-client";
+import toast from "react-hot-toast"; // Recommend installing react-hot-toast if not present
 
 interface Order {
   id: number;
@@ -38,20 +40,28 @@ const KitchenPage = () => {
   // New State for Visual Alert
   const [isNewOrderAlert, setIsNewOrderAlert] = useState(false);
 
+  // --- AUTH CHECK & LOAD ---
   const loadOrders = async () => {
     try {
       const data = await fetchKitchenOrders();
       setOrders(data);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Connection failed", error);
+
+      // If the backend says "Unauthorized" (401/403), force logout
+      if (
+        error.response &&
+        (error.response.status === 401 || error.response.status === 403)
+      ) {
+        toast.error("Session expired. Please login again.");
+        handleLogout();
+      }
     } finally {
       setLoading(false);
     }
   };
 
-  // Function to play sound
   const playNotificationSound = () => {
-    // Uses a standard 'pop' notification sound
     const audio = new Audio(
       "https://codeskulptor-demos.commondatastorage.googleapis.com/pang/pop.mp3"
     );
@@ -64,23 +74,37 @@ const KitchenPage = () => {
   };
 
   useEffect(() => {
+    // 1. Security Check on Mount
+    const token = localStorage.getItem("token");
+    if (!token) {
+      navigate("/login");
+      return;
+    }
+
     loadOrders();
 
     const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
-    const SOCKET_URL = API_URL.replace("/api", "");
-    const socket = io(SOCKET_URL);
+    const SOCKET_URL = API_URL.replace("/api", ""); // Result: http://localhost:5000
+
+    // Connect to Socket
+    const socket = io(SOCKET_URL, {
+      transports: ["websocket"], // Force websocket for better performance
+      reconnection: true,
+    });
+
+    socket.on("connect", () => {
+      console.log("🟢 Kitchen connected to live updates");
+    });
 
     socket.on("orders_updated", () => {
       console.log("🔔 New Order Received!");
-
-      // 1. Play Sound
       playNotificationSound();
 
-      // 2. Trigger Visual Flash
+      // Flash Effect
       setIsNewOrderAlert(true);
-      setTimeout(() => setIsNewOrderAlert(false), 800); // Flash for 0.8s
+      setTimeout(() => setIsNewOrderAlert(false), 800);
 
-      // 3. Refresh Data
+      // Refresh Data
       loadOrders();
     });
 
@@ -90,9 +114,10 @@ const KitchenPage = () => {
       socket.disconnect();
       clearInterval(timerInterval);
     };
-  }, []);
+  }, [navigate]);
 
   const handleStatusChange = async (id: number, newStatus: string) => {
+    // Optimistic Update (Update UI immediately)
     if (newStatus === "completed") {
       setOrders(orders.filter((o) => o.id !== id));
     } else {
@@ -102,10 +127,18 @@ const KitchenPage = () => {
         )
       );
     }
-    await updateStatus(id, newStatus);
+
+    try {
+      await updateStatus(id, newStatus);
+    } catch (error) {
+      toast.error("Failed to update status");
+      loadOrders(); // Revert on failure
+    }
   };
 
   const handleLogout = () => {
+    // CRITICAL: Remove the token so the Interceptor stops sending bad data
+    localStorage.removeItem("token");
     localStorage.removeItem("isAuthenticated");
     localStorage.removeItem("userRole");
     navigate("/login");
@@ -136,7 +169,6 @@ const KitchenPage = () => {
   }
 
   return (
-    // Visual Flash Effect on the main container
     <div
       className={`min-h-screen bg-gray-900 text-gray-100 font-sans flex flex-col transition-all duration-300 ${isNewOrderAlert ? "ring-8 ring-inset ring-brand-yellow" : ""}`}
     >
@@ -161,7 +193,15 @@ const KitchenPage = () => {
           </div>
 
           <div className="flex gap-3">
-            {/* Audio Indicator */}
+            {/* Manual Refresh Button */}
+            <button
+              onClick={loadOrders}
+              className="flex items-center gap-2 bg-gray-700 text-gray-300 px-3 py-2 rounded-lg text-xs font-bold hover:bg-gray-600 hover:text-white transition-colors"
+              title="Force Refresh"
+            >
+              <RefreshCw size={14} /> Refresh
+            </button>
+
             <button
               onClick={playNotificationSound}
               className="hidden md:flex items-center gap-2 bg-gray-700 text-gray-300 px-3 py-2 rounded-lg text-xs font-bold hover:bg-gray-600"

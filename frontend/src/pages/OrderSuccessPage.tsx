@@ -1,10 +1,8 @@
 import React, { useEffect, useState } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import {
-  CheckCircle,
   ArrowRight,
   Printer,
-  Loader2,
   AlertCircle,
   Home,
   Receipt,
@@ -14,7 +12,7 @@ import {
   Utensils,
   CreditCard,
   Banknote,
-  ChefHat,
+  // ChefHat removed as it is no longer needed
 } from "lucide-react";
 import { io } from "socket.io-client";
 import { fetchOrderById } from "../services/api";
@@ -184,16 +182,30 @@ const OrderSuccessPage = () => {
         {/* Main Paper Body */}
         <div className="bg-white text-gray-900 relative">
           {/* Top Border Accent */}
-          <div className="h-2 bg-gradient-to-r from-brand-red via-brand-yellow to-brand-red w-full"></div>
+          <div className="h-2 bg-gradient-to-r from-red-600 via-yellow-400 to-red-600 w-full"></div>
 
           {/* HEADER */}
           <div className="p-8 text-center pb-6">
-            <div className="inline-flex items-center justify-center w-16 h-16 bg-zinc-100 rounded-full mb-4 text-brand-dark shadow-inner">
-              <ChefHat size={32} />
+            {/* UPDATED LOGO SECTION */}
+            <div className="flex justify-center mb-4">
+              <img
+                src="/jolibee.jpg"
+                alt="Jollibee"
+                className="h-24 w-auto object-contain"
+                onError={(e) => {
+                  // Fallback to a remote URL if local file is missing
+                  e.currentTarget.src =
+                    "https://upload.wikimedia.org/wikipedia/en/thumb/8/84/Jollibee_2011_logo.svg/1200px-Jollibee_2011_logo.svg.png";
+                }}
+              />
             </div>
-            <h1 className="text-3xl font-black tracking-tight uppercase mb-1 text-brand-dark">
+
+            {/* I removed the <h1> text since the logo image likely contains the text. 
+                If you want the text back, uncomment the lines below: */}
+            {/* <h1 className="text-3xl font-black tracking-tight uppercase mb-1 text-red-600">
               Jollibee
-            </h1>
+            </h1> */}
+
             <div className="flex flex-col gap-1 text-[10px] text-gray-500 font-bold uppercase tracking-widest mt-2">
               <span className="flex items-center justify-center gap-1">
                 <MapPin size={10} /> Masterson Ave, Cagayan de Oro City

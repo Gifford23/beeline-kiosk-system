@@ -13,7 +13,7 @@ import {
   Wallet,
   ScanLine,
   Wifi,
-  Ticket, // Added Ticket Icon
+  Ticket, // Now used in the success modal!
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useCart } from "../context/CartContext";
@@ -24,6 +24,7 @@ const CheckoutPage = () => {
   const navigate = useNavigate();
   const { cart, getCartTotal, clearCart } = useCart();
 
+  // --- STATE MANAGEMENT ---
   const [diningOption, setDiningOption] = useState<"dine-in" | "take-out">(
     () => {
       const saved = localStorage.getItem("orderType");
@@ -36,12 +37,12 @@ const CheckoutPage = () => {
   >("card");
 
   const [isProcessing, setIsProcessing] = useState(false);
-  // Added "queue_shown" step
+
+  // Payment Flow State
   const [paymentStep, setPaymentStep] = useState<
     "idle" | "awaiting_interaction" | "processing_payment" | "queue_shown"
   >("idle");
 
-  // New state to hold the number to show in the modal
   const [generatedQueueNum, setGeneratedQueueNum] = useState<string>("");
 
   useEffect(() => {
@@ -50,6 +51,7 @@ const CheckoutPage = () => {
 
   const total = getCartTotal();
 
+  // --- HANDLE PAYMENT ---
   const handlePayNow = async () => {
     if (cart.length === 0) {
       toast.error("Your cart is empty!");
@@ -58,14 +60,15 @@ const CheckoutPage = () => {
 
     setIsProcessing(true);
 
-    // Step 1: User Interaction
+    // Step 1: Determine User Interaction
+    // Cash at counter doesn't need a "scan/tap" step
     if (paymentMethod === "counter") {
-      setPaymentStep("processing_payment"); // Skip interaction for counter
+      setPaymentStep("processing_payment");
     } else {
       setPaymentStep("awaiting_interaction");
     }
 
-    // SIMULATION DELAY (Scanning/Tapping)
+    // SIMULATION: Interaction Delay (Scanning QR / Tapping Card)
     const interactionDelay = paymentMethod === "counter" ? 1000 : 3000;
 
     setTimeout(() => {
@@ -74,9 +77,9 @@ const CheckoutPage = () => {
 
       setTimeout(async () => {
         try {
-          // --- REAL API CALL HAPPENS HERE NOW ---
+          // --- API CALL ---
           const orderData = {
-            customer_name: "Guest User",
+            customer_name: "Guest User", // Can be dynamic if you add login later
             total_amount: total,
             items: cart.map((item) => ({
               id: item.id,
@@ -89,38 +92,48 @@ const CheckoutPage = () => {
 
           const result = await createOrder(orderData);
 
-          // 1. Capture the Queue Number from Backend
-          setGeneratedQueueNum(result.queueNumber);
+          // 1. Capture Queue Number safely (handles snake_case or camelCase)
+          const queueNum = result.queueNumber || result.queue_number || "---";
+          setGeneratedQueueNum(queueNum);
 
           // 2. Clear Cart
           clearCart();
 
-          // 3. Show the Formal Queue Modal
+          // 3. Show Success Modal
           setPaymentStep("queue_shown");
 
-          // 4. Redirect after user sees the number (4 seconds)
+          // 4. Redirect after delay
           setTimeout(() => {
-            navigate("/order-success", { state: { orderId: result.orderId } });
+            navigate("/order-success", {
+              state: {
+                orderId: result.orderId || result.id,
+                queueNumber: queueNum,
+              },
+            });
           }, 4000);
         } catch (error) {
           console.error("Payment Error:", error);
-          toast.error("Transaction Failed. Try again.");
+          toast.error("Transaction Failed. Please try again.");
           setIsProcessing(false);
           setPaymentStep("idle");
         }
-      }, 2000); // Processing delay
+      }, 2000); // Network simulation delay
     }, interactionDelay);
   };
 
+  // --- EMPTY STATE ---
   if (cart.length === 0) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 text-center p-6">
+        <div className="bg-gray-100 p-6 rounded-full mb-4">
+          <ShoppingBag className="w-12 h-12 text-gray-400" />
+        </div>
         <h2 className="text-2xl font-bold text-gray-400 mb-4">
           Your bag is empty
         </h2>
         <button
           onClick={() => navigate("/")}
-          className="text-brand-dark font-bold underline"
+          className="text-brand-dark font-bold underline hover:text-brand-red transition-colors"
         >
           Go back to menu
         </button>
@@ -151,14 +164,22 @@ const CheckoutPage = () => {
             <div className="grid grid-cols-2 gap-4">
               <button
                 onClick={() => setDiningOption("dine-in")}
-                className={`p-6 rounded-3xl border-4 flex flex-col items-center gap-3 transition-all ${diningOption === "dine-in" ? "border-brand-red bg-red-50/50 text-brand-red shadow-lg scale-105" : "border-transparent bg-white text-gray-400 hover:bg-gray-100"}`}
+                className={`p-6 rounded-3xl border-4 flex flex-col items-center gap-3 transition-all ${
+                  diningOption === "dine-in"
+                    ? "border-brand-red bg-red-50/50 text-brand-red shadow-lg scale-105"
+                    : "border-transparent bg-white text-gray-400 hover:bg-gray-100"
+                }`}
               >
                 <Store className="w-10 h-10" />
                 <span className="font-extrabold text-lg">Dine In</span>
               </button>
               <button
                 onClick={() => setDiningOption("take-out")}
-                className={`p-6 rounded-3xl border-4 flex flex-col items-center gap-3 transition-all ${diningOption === "take-out" ? "border-brand-yellow bg-yellow-50/50 text-brand-dark shadow-lg scale-105 border-brand-yellow" : "border-transparent bg-white text-gray-400 hover:bg-gray-100"}`}
+                className={`p-6 rounded-3xl border-4 flex flex-col items-center gap-3 transition-all ${
+                  diningOption === "take-out"
+                    ? "border-brand-yellow bg-yellow-50/50 text-brand-dark shadow-lg scale-105 border-brand-yellow"
+                    : "border-transparent bg-white text-gray-400 hover:bg-gray-100"
+                }`}
               >
                 <ShoppingBag className="w-10 h-10" />
                 <span className="font-extrabold text-lg">Take Out</span>
@@ -174,7 +195,11 @@ const CheckoutPage = () => {
               {/* Card */}
               <div
                 onClick={() => setPaymentMethod("card")}
-                className={`p-4 rounded-2xl border-2 flex items-center justify-between cursor-pointer transition-all ${paymentMethod === "card" ? "border-blue-500 bg-blue-50/30 shadow-md" : "border-transparent bg-white hover:bg-gray-50"}`}
+                className={`p-4 rounded-2xl border-2 flex items-center justify-between cursor-pointer transition-all ${
+                  paymentMethod === "card"
+                    ? "border-blue-500 bg-blue-50/30 shadow-md"
+                    : "border-transparent bg-white hover:bg-gray-50"
+                }`}
               >
                 <div className="flex items-center gap-4">
                   <div className="w-12 h-12 bg-blue-500 rounded-xl flex items-center justify-center text-white shadow-md">
@@ -185,7 +210,11 @@ const CheckoutPage = () => {
                   </span>
                 </div>
                 <div
-                  className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${paymentMethod === "card" ? "border-blue-500" : "border-gray-300"}`}
+                  className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${
+                    paymentMethod === "card"
+                      ? "border-blue-500"
+                      : "border-gray-300"
+                  }`}
                 >
                   {paymentMethod === "card" && (
                     <div className="w-3 h-3 rounded-full bg-blue-500" />
@@ -196,7 +225,11 @@ const CheckoutPage = () => {
               {/* GCash */}
               <div
                 onClick={() => setPaymentMethod("gcash")}
-                className={`p-4 rounded-2xl border-2 flex items-center justify-between cursor-pointer transition-all ${paymentMethod === "gcash" ? "border-blue-400 bg-blue-50/50 shadow-md" : "border-transparent bg-white hover:bg-gray-50"}`}
+                className={`p-4 rounded-2xl border-2 flex items-center justify-between cursor-pointer transition-all ${
+                  paymentMethod === "gcash"
+                    ? "border-[#007DFE] bg-blue-50/50 shadow-md"
+                    : "border-transparent bg-white hover:bg-gray-50"
+                }`}
               >
                 <div className="flex items-center gap-4">
                   <div className="w-12 h-12 bg-[#007DFE] rounded-xl flex items-center justify-center text-white shadow-md">
@@ -207,7 +240,11 @@ const CheckoutPage = () => {
                   </span>
                 </div>
                 <div
-                  className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${paymentMethod === "gcash" ? "border-[#007DFE]" : "border-gray-300"}`}
+                  className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${
+                    paymentMethod === "gcash"
+                      ? "border-[#007DFE]"
+                      : "border-gray-300"
+                  }`}
                 >
                   {paymentMethod === "gcash" && (
                     <div className="w-3 h-3 rounded-full bg-[#007DFE]" />
@@ -218,7 +255,11 @@ const CheckoutPage = () => {
               {/* Maya */}
               <div
                 onClick={() => setPaymentMethod("maya")}
-                className={`p-4 rounded-2xl border-2 flex items-center justify-between cursor-pointer transition-all ${paymentMethod === "maya" ? "border-green-500 bg-green-50/30 shadow-md" : "border-transparent bg-white hover:bg-gray-50"}`}
+                className={`p-4 rounded-2xl border-2 flex items-center justify-between cursor-pointer transition-all ${
+                  paymentMethod === "maya"
+                    ? "border-green-500 bg-green-50/30 shadow-md"
+                    : "border-transparent bg-white hover:bg-gray-50"
+                }`}
               >
                 <div className="flex items-center gap-4">
                   <div className="w-12 h-12 bg-black rounded-xl flex items-center justify-center text-green-400 shadow-md border border-green-500">
@@ -229,7 +270,11 @@ const CheckoutPage = () => {
                   </span>
                 </div>
                 <div
-                  className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${paymentMethod === "maya" ? "border-green-500" : "border-gray-300"}`}
+                  className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${
+                    paymentMethod === "maya"
+                      ? "border-green-500"
+                      : "border-gray-300"
+                  }`}
                 >
                   {paymentMethod === "maya" && (
                     <div className="w-3 h-3 rounded-full bg-green-500" />
@@ -240,7 +285,11 @@ const CheckoutPage = () => {
               {/* Counter */}
               <div
                 onClick={() => setPaymentMethod("counter")}
-                className={`p-4 rounded-2xl border-2 flex items-center justify-between cursor-pointer transition-all ${paymentMethod === "counter" ? "border-brand-yellow bg-yellow-50/30 shadow-md" : "border-transparent bg-white hover:bg-gray-50"}`}
+                className={`p-4 rounded-2xl border-2 flex items-center justify-between cursor-pointer transition-all ${
+                  paymentMethod === "counter"
+                    ? "border-brand-yellow bg-yellow-50/30 shadow-md"
+                    : "border-transparent bg-white hover:bg-gray-50"
+                }`}
               >
                 <div className="flex items-center gap-4">
                   <div className="w-12 h-12 bg-brand-yellow rounded-xl flex items-center justify-center text-brand-dark shadow-md">
@@ -251,7 +300,11 @@ const CheckoutPage = () => {
                   </span>
                 </div>
                 <div
-                  className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${paymentMethod === "counter" ? "border-brand-yellow" : "border-gray-300"}`}
+                  className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${
+                    paymentMethod === "counter"
+                      ? "border-brand-yellow"
+                      : "border-gray-300"
+                  }`}
                 >
                   {paymentMethod === "counter" && (
                     <div className="w-3 h-3 rounded-full bg-brand-yellow" />
@@ -356,7 +409,7 @@ const CheckoutPage = () => {
               </div>
             )}
 
-            {/* 3. QUEUE NUMBER DISPLAY (NEW FORMAL MODAL) */}
+            {/* 3. QUEUE NUMBER DISPLAY (With Ticket Icon!) */}
             {paymentStep === "queue_shown" && (
               <div className="py-4 flex flex-col items-center animate-in zoom-in duration-500">
                 <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mb-4 text-green-600">
@@ -371,6 +424,11 @@ const CheckoutPage = () => {
                 <div className="bg-brand-gray w-full p-6 rounded-2xl border-2 border-dashed border-gray-300 my-4 relative">
                   <div className="absolute -left-3 top-1/2 w-6 h-6 bg-white rounded-full"></div>
                   <div className="absolute -right-3 top-1/2 w-6 h-6 bg-white rounded-full"></div>
+
+                  {/* Added the Ticket icon here for visual flair */}
+                  <div className="absolute top-2 right-2 opacity-10 rotate-12">
+                    <Ticket size={48} className="text-brand-dark" />
+                  </div>
 
                   <p className="text-xs text-gray-400 font-bold uppercase mb-1">
                     Your Queue Number
