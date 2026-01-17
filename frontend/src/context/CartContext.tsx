@@ -1,7 +1,12 @@
-import React, { createContext, useContext, useState, ReactNode } from "react";
+import React, {
+  createContext,
+  useContext,
+  useState,
+  ReactNode,
+  useEffect,
+} from "react";
 import toast from "react-hot-toast";
 
-// Define Types
 export interface CartItem {
   id: number;
   name: string;
@@ -17,30 +22,33 @@ interface CartContextType {
   updateQuantity: (id: number, quantity: number) => void;
   getCartCount: () => number;
   getCartTotal: () => number;
+  clearCart: () => void; // Added clearCart for after checkout
 }
 
 const CartContext = createContext<CartContextType | undefined>(undefined);
 
 export const CartProvider = ({ children }: { children: ReactNode }) => {
-  const [cart, setCart] = useState<CartItem[]>([]);
+  // 1. INITIALIZE FROM LOCAL STORAGE
+  const [cart, setCart] = useState<CartItem[]>(() => {
+    const savedCart = localStorage.getItem("beeline_cart");
+    return savedCart ? JSON.parse(savedCart) : [];
+  });
 
-  // Function: Add Item
+  // 2. SAVE TO LOCAL STORAGE ON CHANGE
+  useEffect(() => {
+    localStorage.setItem("beeline_cart", JSON.stringify(cart));
+  }, [cart]);
+
   const addToCart = (product: any) => {
-    // 1. Determine Feedback (Using current state)
-    // We check 'cart' here just to decide which message to show.
     const isLikelyExisting = cart.some((item) => item.id === product.id);
-
     if (isLikelyExisting) {
       toast.success(`Added another ${product.name}`, { icon: "👌" });
     } else {
       toast.success(`${product.name} added to bag!`, { icon: "🍗" });
     }
 
-    // 2. State Update (Using prevCart to ensure data safety)
     setCart((prevCart) => {
-      // We check prevCart again here to prevent race conditions or duplicates
       const existingItem = prevCart.find((item) => item.id === product.id);
-
       if (existingItem) {
         return prevCart.map((item) =>
           item.id === product.id
@@ -53,30 +61,28 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
     });
   };
 
-  // Function: Update Quantity
   const updateQuantity = (id: number, quantity: number) => {
-    if (quantity < 1) return; // Prevent going below 1
-
+    if (quantity < 1) return;
     setCart((prevCart) =>
-      prevCart.map((item) =>
-        item.id === id ? { ...item, quantity: quantity } : item
-      )
+      prevCart.map((item) => (item.id === id ? { ...item, quantity } : item))
     );
   };
 
-  // Function: Remove Item Completely
   const removeFromCart = (id: number) => {
-    toast.error("Item removed", { icon: "🗑️" }); // Safe: called before setCart
+    toast.error("Item removed", { icon: "🗑️" });
     setCart((prevCart) => prevCart.filter((item) => item.id !== id));
   };
 
-  const getCartCount = () => {
-    return cart.reduce((total, item) => total + item.quantity, 0);
+  // 3. NEW: Clear Cart Function
+  const clearCart = () => {
+    setCart([]);
+    localStorage.removeItem("beeline_cart");
   };
 
-  const getCartTotal = () => {
-    return cart.reduce((total, item) => total + item.price * item.quantity, 0);
-  };
+  const getCartCount = () =>
+    cart.reduce((total, item) => total + item.quantity, 0);
+  const getCartTotal = () =>
+    cart.reduce((total, item) => total + item.price * item.quantity, 0);
 
   return (
     <CartContext.Provider
@@ -87,6 +93,7 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
         updateQuantity,
         getCartCount,
         getCartTotal,
+        clearCart,
       }}
     >
       {children}
@@ -96,8 +103,6 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
 
 export const useCart = () => {
   const context = useContext(CartContext);
-  if (!context) {
-    throw new Error("useCart must be used within a CartProvider");
-  }
+  if (!context) throw new Error("useCart must be used within a CartProvider");
   return context;
 };

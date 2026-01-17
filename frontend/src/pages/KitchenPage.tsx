@@ -9,14 +9,14 @@ import {
   Loader2,
   Utensils,
   ShoppingBag,
-  CreditCard, // Added Icon
-  Banknote, // Added Icon
+  CreditCard,
+  Banknote,
+  Volume2, // Added Icon for Audio
 } from "lucide-react";
 import { fetchKitchenOrders, updateStatus } from "../services/api";
 import { useNavigate } from "react-router-dom";
 import { io } from "socket.io-client";
 
-// 1. Update Interface to include Payment details
 interface Order {
   id: number;
   queue_number: string;
@@ -24,8 +24,8 @@ interface Order {
   items: { name: string; quantity: number }[];
   created_at: string;
   order_type: "dine-in" | "take-out";
-  payment_status: "paid" | "pending"; // New Field
-  payment_method: "card" | "cash"; // New Field
+  payment_status: "paid" | "pending";
+  payment_method: "card" | "cash";
 }
 
 const KitchenPage = () => {
@@ -34,6 +34,9 @@ const KitchenPage = () => {
   const [loading, setLoading] = useState(true);
   const [activeFilter, setActiveFilter] = useState<string>("all");
   const [currentTime, setCurrentTime] = useState(new Date());
+
+  // New State for Visual Alert
+  const [isNewOrderAlert, setIsNewOrderAlert] = useState(false);
 
   const loadOrders = async () => {
     try {
@@ -46,18 +49,38 @@ const KitchenPage = () => {
     }
   };
 
+  // Function to play sound
+  const playNotificationSound = () => {
+    // Uses a standard 'pop' notification sound
+    const audio = new Audio(
+      "https://codeskulptor-demos.commondatastorage.googleapis.com/pang/pop.mp3"
+    );
+    audio.volume = 1.0;
+    audio
+      .play()
+      .catch((e) =>
+        console.log("Audio play blocked (user must interact first)", e)
+      );
+  };
+
   useEffect(() => {
     loadOrders();
 
-    // 2. Dynamic Socket URL (Works on localhost AND Railway)
-    // We strip "/api" from the API URL to get the root server URL
     const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
     const SOCKET_URL = API_URL.replace("/api", "");
-
     const socket = io(SOCKET_URL);
 
     socket.on("orders_updated", () => {
       console.log("🔔 New Order Received!");
+
+      // 1. Play Sound
+      playNotificationSound();
+
+      // 2. Trigger Visual Flash
+      setIsNewOrderAlert(true);
+      setTimeout(() => setIsNewOrderAlert(false), 800); // Flash for 0.8s
+
+      // 3. Refresh Data
       loadOrders();
     });
 
@@ -113,12 +136,17 @@ const KitchenPage = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-900 text-gray-100 font-sans flex flex-col animate-in fade-in duration-500">
+    // Visual Flash Effect on the main container
+    <div
+      className={`min-h-screen bg-gray-900 text-gray-100 font-sans flex flex-col transition-all duration-300 ${isNewOrderAlert ? "ring-8 ring-inset ring-brand-yellow" : ""}`}
+    >
       {/* Header */}
       <header className="bg-gray-800 border-b border-gray-700 px-6 py-4 shadow-md z-10 sticky top-0">
         <div className="flex justify-between items-center">
           <div className="flex items-center gap-4">
-            <div className="bg-brand-yellow p-2 rounded-lg text-brand-dark shadow-lg shadow-yellow-500/20">
+            <div
+              className={`p-2 rounded-lg text-brand-dark shadow-lg transition-colors ${isNewOrderAlert ? "bg-white scale-110" : "bg-brand-yellow shadow-yellow-500/20"}`}
+            >
               <ChefHat size={28} />
             </div>
             <div>
@@ -133,6 +161,15 @@ const KitchenPage = () => {
           </div>
 
           <div className="flex gap-3">
+            {/* Audio Indicator */}
+            <button
+              onClick={playNotificationSound}
+              className="hidden md:flex items-center gap-2 bg-gray-700 text-gray-300 px-3 py-2 rounded-lg text-xs font-bold hover:bg-gray-600"
+              title="Test Audio"
+            >
+              <Volume2 size={14} /> Test Sound
+            </button>
+
             <button
               onClick={handleLogout}
               className="flex items-center gap-2 bg-red-900/30 text-red-400 border border-red-900/50 hover:bg-red-900/50 px-4 py-2 rounded-lg transition-all font-bold text-sm"
@@ -226,7 +263,7 @@ const KitchenPage = () => {
                     </div>
 
                     <div className="flex flex-col items-end gap-1">
-                      {/* 3. NEW: Payment Badge */}
+                      {/* Payment Badge */}
                       <div
                         className={`flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider border ${
                           isPaid

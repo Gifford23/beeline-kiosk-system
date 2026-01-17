@@ -11,19 +11,19 @@ import {
   CheckCircle,
   Smartphone,
   Wallet,
-  ScanLine, // For QR Code visual
-  Wifi, // For Terminal visual
+  ScanLine,
+  Wifi,
+  Ticket, // Added Ticket Icon
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useCart } from "../context/CartContext";
-import { createOrder } from "../services/api"; // Ensure api.ts exports createOrder
+import { createOrder } from "../services/api";
 import toast from "react-hot-toast";
 
 const CheckoutPage = () => {
   const navigate = useNavigate();
-  const { cart, getCartTotal } = useCart();
+  const { cart, getCartTotal, clearCart } = useCart();
 
-  // 1. Initialize State
   const [diningOption, setDiningOption] = useState<"dine-in" | "take-out">(
     () => {
       const saved = localStorage.getItem("orderType");
@@ -34,17 +34,21 @@ const CheckoutPage = () => {
   const [paymentMethod, setPaymentMethod] = useState<
     "card" | "gcash" | "maya" | "counter"
   >("card");
+
   const [isProcessing, setIsProcessing] = useState(false);
+  // Added "queue_shown" step
   const [paymentStep, setPaymentStep] = useState<
-    "idle" | "awaiting_interaction" | "processing_payment" | "approved"
+    "idle" | "awaiting_interaction" | "processing_payment" | "queue_shown"
   >("idle");
+
+  // New state to hold the number to show in the modal
+  const [generatedQueueNum, setGeneratedQueueNum] = useState<string>("");
 
   useEffect(() => {
     localStorage.setItem("orderType", diningOption);
   }, [diningOption]);
 
   const total = getCartTotal();
-  const tax = total * 0.12;
 
   const handlePayNow = async () => {
     if (cart.length === 0) {
@@ -52,49 +56,60 @@ const CheckoutPage = () => {
       return;
     }
 
-    // START FLOW: Open Modal
     setIsProcessing(true);
 
-    // Step 1: User Interaction (Scan QR / Insert Card)
-    setPaymentStep("awaiting_interaction");
+    // Step 1: User Interaction
+    if (paymentMethod === "counter") {
+      setPaymentStep("processing_payment"); // Skip interaction for counter
+    } else {
+      setPaymentStep("awaiting_interaction");
+    }
 
-    // SIMULATION: Wait for "User Action" (e.g., Scanning QR or Tapping Card)
-    // In a real app, this would be a WebSocket waiting for a "payment.succeeded" webhook
+    // SIMULATION DELAY (Scanning/Tapping)
+    const interactionDelay = paymentMethod === "counter" ? 1000 : 3000;
+
     setTimeout(() => {
+      // Step 2: Processing / Verifying
       setPaymentStep("processing_payment");
 
-      // Step 2: Verifying with Bank
       setTimeout(async () => {
         try {
-          // Step 3: Approved
-          setPaymentStep("approved");
+          // --- REAL API CALL HAPPENS HERE NOW ---
+          const orderData = {
+            customer_name: "Guest User",
+            total_amount: total,
+            items: cart.map((item) => ({
+              id: item.id,
+              quantity: item.quantity,
+              price: item.price,
+            })),
+            order_type: diningOption,
+            payment_method: paymentMethod,
+          };
 
-          // Step 4: Create Order & Redirect
-          setTimeout(async () => {
-            const orderData = {
-              customer_name: "Guest User",
-              total_amount: total,
-              items: cart.map((item) => ({
-                id: item.id,
-                quantity: item.quantity,
-                price: item.price,
-              })),
-              order_type: diningOption,
-              payment_method: paymentMethod,
-            };
+          const result = await createOrder(orderData);
 
-            const result = await createOrder(orderData);
-            // Redirect to Success Page with Order ID
+          // 1. Capture the Queue Number from Backend
+          setGeneratedQueueNum(result.queueNumber);
+
+          // 2. Clear Cart
+          clearCart();
+
+          // 3. Show the Formal Queue Modal
+          setPaymentStep("queue_shown");
+
+          // 4. Redirect after user sees the number (4 seconds)
+          setTimeout(() => {
             navigate("/order-success", { state: { orderId: result.orderId } });
-          }, 1500); // 1.5s delay to show Green Checkmark
+          }, 4000);
         } catch (error) {
           console.error("Payment Error:", error);
           toast.error("Transaction Failed. Try again.");
           setIsProcessing(false);
           setPaymentStep("idle");
         }
-      }, 2000); // 2s Verification Delay
-    }, 4000); // 4s "Scanning/Tapping" Delay (Longer for realism)
+      }, 2000); // Processing delay
+    }, interactionDelay);
   };
 
   if (cart.length === 0) {
@@ -268,16 +283,6 @@ const CheckoutPage = () => {
               </div>
             ))}
           </div>
-          <div className="border-t-2 border-dashed border-gray-200 py-4 space-y-2">
-            <div className="flex justify-between text-gray-500 text-sm">
-              <span>Subtotal</span>
-              <span>₱{(total - tax).toFixed(2)}</span>
-            </div>
-            <div className="flex justify-between text-gray-500 text-sm">
-              <span>VAT (12%)</span>
-              <span>₱{tax.toFixed(2)}</span>
-            </div>
-          </div>
           <div className="bg-brand-gray p-4 rounded-xl flex justify-between items-center mb-6">
             <span className="font-bold text-gray-600">Total to Pay</span>
             <span className="text-3xl font-black text-brand-red">
@@ -294,35 +299,29 @@ const CheckoutPage = () => {
         </div>
       </div>
 
-      {/* --- REAL WORLD PAYMENT GATEWAY MODAL --- */}
+      {/* --- QUEUE / PAYMENT MODAL --- */}
       {isProcessing && (
         <div className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4 backdrop-blur-md animate-in fade-in">
-          <div className="bg-white rounded-3xl p-8 max-w-sm w-full text-center shadow-2xl relative overflow-hidden">
-            {/* 1. INTERACTION STAGE (Scan/Tap) */}
+          <div className="bg-white rounded-3xl p-8 max-w-sm w-full text-center shadow-2xl relative overflow-hidden border-4 border-white">
+            {/* 1. INTERACTION STAGE */}
             {paymentStep === "awaiting_interaction" && (
               <div className="py-4 animate-in zoom-in duration-300">
-                {/* E-WALLET FLOW */}
                 {(paymentMethod === "gcash" || paymentMethod === "maya") && (
                   <>
                     <h3 className="text-xl font-black text-gray-800 mb-4">
                       Scan to Pay
                     </h3>
                     <div className="bg-gray-900 p-4 rounded-xl inline-block mb-4 shadow-inner relative">
-                      {/* Simulated QR Code */}
                       <ScanLine className="text-white w-32 h-32 animate-pulse" />
-                      <div className="absolute inset-0 border-2 border-white/20 rounded-xl"></div>
                     </div>
                     <p className="text-gray-500 font-bold mb-2">
                       Total: ₱{total.toFixed(2)}
                     </p>
                     <p className="text-xs text-gray-400">
-                      Open your {paymentMethod === "gcash" ? "GCash" : "Maya"}{" "}
-                      app and scan this QR code.
+                      Open your app and scan this QR code.
                     </p>
                   </>
                 )}
-
-                {/* CARD FLOW */}
                 {paymentMethod === "card" && (
                   <>
                     <h3 className="text-xl font-black text-gray-800 mb-4">
@@ -333,27 +332,6 @@ const CheckoutPage = () => {
                     </div>
                     <p className="text-gray-600 font-bold mb-2">
                       Tap or Insert Card
-                    </p>
-                    <p className="text-xs text-gray-400">
-                      Please follow instructions on the pin pad.
-                    </p>
-                  </>
-                )}
-
-                {/* COUNTER FLOW */}
-                {paymentMethod === "counter" && (
-                  <>
-                    <h3 className="text-xl font-black text-gray-800 mb-4">
-                      Printing Ticket
-                    </h3>
-                    <div className="bg-yellow-50 p-6 rounded-full inline-block mb-6">
-                      <Receipt className="text-brand-yellow w-16 h-16 animate-bounce" />
-                    </div>
-                    <p className="text-gray-600 font-bold mb-2">
-                      Please Wait...
-                    </p>
-                    <p className="text-xs text-gray-400">
-                      We are generating your queue ticket.
                     </p>
                   </>
                 )}
@@ -368,26 +346,43 @@ const CheckoutPage = () => {
                   className="text-brand-yellow animate-spin mb-6"
                 />
                 <h3 className="text-2xl font-black text-gray-800 mb-2">
-                  Verifying...
+                  {paymentMethod === "counter"
+                    ? "Generating Ticket..."
+                    : "Verifying Payment..."}
                 </h3>
                 <p className="text-gray-500 font-medium">
-                  Communicating with bank...
+                  Please wait a moment...
                 </p>
               </div>
             )}
 
-            {/* 3. SUCCESS STAGE */}
-            {paymentStep === "approved" && (
-              <div className="py-8 flex flex-col items-center animate-in zoom-in duration-300">
-                <div className="w-24 h-24 bg-green-100 rounded-full flex items-center justify-center mb-6 text-green-600 shadow-lg shadow-green-100">
-                  <CheckCircle size={48} strokeWidth={3} />
+            {/* 3. QUEUE NUMBER DISPLAY (NEW FORMAL MODAL) */}
+            {paymentStep === "queue_shown" && (
+              <div className="py-4 flex flex-col items-center animate-in zoom-in duration-500">
+                <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mb-4 text-green-600">
+                  <CheckCircle size={32} strokeWidth={4} />
                 </div>
-                <h3 className="text-2xl font-black text-gray-800 mb-2">
-                  {paymentMethod === "counter"
-                    ? "Ticket Printed!"
-                    : "Payment Approved!"}
+
+                <h3 className="text-lg font-bold text-gray-500 uppercase tracking-widest mb-1">
+                  Order Successful
                 </h3>
-                <p className="text-gray-500 font-medium">Redirecting you...</p>
+
+                {/* TICKET VISUAL */}
+                <div className="bg-brand-gray w-full p-6 rounded-2xl border-2 border-dashed border-gray-300 my-4 relative">
+                  <div className="absolute -left-3 top-1/2 w-6 h-6 bg-white rounded-full"></div>
+                  <div className="absolute -right-3 top-1/2 w-6 h-6 bg-white rounded-full"></div>
+
+                  <p className="text-xs text-gray-400 font-bold uppercase mb-1">
+                    Your Queue Number
+                  </p>
+                  <p className="text-6xl font-black text-brand-dark tracking-tighter">
+                    {generatedQueueNum}
+                  </p>
+                </div>
+
+                <p className="text-gray-400 text-xs">
+                  Redirecting to your receipt...
+                </p>
               </div>
             )}
           </div>
