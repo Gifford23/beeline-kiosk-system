@@ -11,17 +11,19 @@ import {
   CheckCircle,
   Smartphone,
   Wallet,
+  ScanLine, // For QR Code visual
+  Wifi, // For Terminal visual
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useCart } from "../context/CartContext";
-import { createOrder } from "../services/api"; // Updated Import
+import { createOrder } from "../services/api"; // Ensure api.ts exports createOrder
 import toast from "react-hot-toast";
 
 const CheckoutPage = () => {
   const navigate = useNavigate();
   const { cart, getCartTotal } = useCart();
 
-  // 1. Initialize Dining Option
+  // 1. Initialize State
   const [diningOption, setDiningOption] = useState<"dine-in" | "take-out">(
     () => {
       const saved = localStorage.getItem("orderType");
@@ -29,15 +31,12 @@ const CheckoutPage = () => {
     }
   );
 
-  // 2. Payment Methods (Jollibee Standard)
   const [paymentMethod, setPaymentMethod] = useState<
     "card" | "gcash" | "maya" | "counter"
   >("card");
-
-  // Payment Flow State
   const [isProcessing, setIsProcessing] = useState(false);
   const [paymentStep, setPaymentStep] = useState<
-    "idle" | "processing" | "approved"
+    "idle" | "awaiting_interaction" | "processing_payment" | "approved"
   >("idle");
 
   useEffect(() => {
@@ -45,7 +44,7 @@ const CheckoutPage = () => {
   }, [diningOption]);
 
   const total = getCartTotal();
-  const tax = total * 0.12; // VAT Calculation
+  const tax = total * 0.12;
 
   const handlePayNow = async () => {
     if (cart.length === 0) {
@@ -53,43 +52,49 @@ const CheckoutPage = () => {
       return;
     }
 
-    // A. Start Payment Flow
+    // START FLOW: Open Modal
     setIsProcessing(true);
-    setPaymentStep("processing");
 
-    // B. Simulate Bank Delay (2.5 Seconds)
-    setTimeout(async () => {
-      try {
-        // C. Show "Approved" State
-        setPaymentStep("approved");
+    // Step 1: User Interaction (Scan QR / Insert Card)
+    setPaymentStep("awaiting_interaction");
 
-        // Wait 1.5 seconds for user to see the checkmark
-        setTimeout(async () => {
-          // D. Create Order in Backend
-          const orderData = {
-            customer_name: "Guest User",
-            total_amount: total,
-            items: cart.map((item) => ({
-              id: item.id,
-              quantity: item.quantity,
-              price: item.price,
-            })),
-            order_type: diningOption,
-            payment_method: paymentMethod,
-          };
+    // SIMULATION: Wait for "User Action" (e.g., Scanning QR or Tapping Card)
+    // In a real app, this would be a WebSocket waiting for a "payment.succeeded" webhook
+    setTimeout(() => {
+      setPaymentStep("processing_payment");
 
-          const result = await createOrder(orderData);
+      // Step 2: Verifying with Bank
+      setTimeout(async () => {
+        try {
+          // Step 3: Approved
+          setPaymentStep("approved");
 
-          // E. Redirect to Success Page
-          navigate("/order-success", { state: { orderId: result.orderId } });
-        }, 1500);
-      } catch (error) {
-        console.error("Payment failed", error);
-        toast.error("Payment failed. Please try again.");
-        setIsProcessing(false);
-        setPaymentStep("idle");
-      }
-    }, 2500);
+          // Step 4: Create Order & Redirect
+          setTimeout(async () => {
+            const orderData = {
+              customer_name: "Guest User",
+              total_amount: total,
+              items: cart.map((item) => ({
+                id: item.id,
+                quantity: item.quantity,
+                price: item.price,
+              })),
+              order_type: diningOption,
+              payment_method: paymentMethod,
+            };
+
+            const result = await createOrder(orderData);
+            // Redirect to Success Page with Order ID
+            navigate("/order-success", { state: { orderId: result.orderId } });
+          }, 1500); // 1.5s delay to show Green Checkmark
+        } catch (error) {
+          console.error("Payment Error:", error);
+          toast.error("Transaction Failed. Try again.");
+          setIsProcessing(false);
+          setPaymentStep("idle");
+        }
+      }, 2000); // 2s Verification Delay
+    }, 4000); // 4s "Scanning/Tapping" Delay (Longer for realism)
   };
 
   if (cart.length === 0) {
@@ -122,9 +127,8 @@ const CheckoutPage = () => {
       </div>
 
       <div className="max-w-4xl mx-auto p-6 grid grid-cols-1 lg:grid-cols-2 gap-8">
-        {/* Left Column: Options */}
+        {/* LEFT COLUMN: Options */}
         <div className="space-y-8">
-          {/* Dining Option */}
           <section>
             <h2 className="text-lg font-bold text-gray-700 mb-4 flex items-center gap-2">
               <Utensils className="w-5 h-5 text-brand-red" /> Dining Option
@@ -132,24 +136,14 @@ const CheckoutPage = () => {
             <div className="grid grid-cols-2 gap-4">
               <button
                 onClick={() => setDiningOption("dine-in")}
-                className={`p-6 rounded-3xl border-4 flex flex-col items-center gap-3 transition-all duration-300
-                  ${
-                    diningOption === "dine-in"
-                      ? "border-brand-red bg-red-50/50 text-brand-red shadow-lg scale-105"
-                      : "border-transparent bg-white text-gray-400 hover:bg-gray-100"
-                  }`}
+                className={`p-6 rounded-3xl border-4 flex flex-col items-center gap-3 transition-all ${diningOption === "dine-in" ? "border-brand-red bg-red-50/50 text-brand-red shadow-lg scale-105" : "border-transparent bg-white text-gray-400 hover:bg-gray-100"}`}
               >
                 <Store className="w-10 h-10" />
                 <span className="font-extrabold text-lg">Dine In</span>
               </button>
               <button
                 onClick={() => setDiningOption("take-out")}
-                className={`p-6 rounded-3xl border-4 flex flex-col items-center gap-3 transition-all duration-300
-                  ${
-                    diningOption === "take-out"
-                      ? "border-brand-yellow bg-yellow-50/50 text-brand-dark shadow-lg scale-105 border-brand-yellow"
-                      : "border-transparent bg-white text-gray-400 hover:bg-gray-100"
-                  }`}
+                className={`p-6 rounded-3xl border-4 flex flex-col items-center gap-3 transition-all ${diningOption === "take-out" ? "border-brand-yellow bg-yellow-50/50 text-brand-dark shadow-lg scale-105 border-brand-yellow" : "border-transparent bg-white text-gray-400 hover:bg-gray-100"}`}
               >
                 <ShoppingBag className="w-10 h-10" />
                 <span className="font-extrabold text-lg">Take Out</span>
@@ -157,28 +151,22 @@ const CheckoutPage = () => {
             </div>
           </section>
 
-          {/* Payment Method */}
           <section>
             <h2 className="text-lg font-bold text-gray-700 mb-4 flex items-center gap-2">
               <CreditCard className="w-5 h-5 text-brand-red" /> Payment Method
             </h2>
             <div className="space-y-3">
-              {/* 1. Card Payment */}
+              {/* Card */}
               <div
                 onClick={() => setPaymentMethod("card")}
-                className={`p-4 rounded-2xl border-2 flex items-center justify-between cursor-pointer transition-all
-                  ${
-                    paymentMethod === "card"
-                      ? "border-blue-500 bg-blue-50/30 shadow-md"
-                      : "border-transparent bg-white hover:bg-gray-50"
-                  }`}
+                className={`p-4 rounded-2xl border-2 flex items-center justify-between cursor-pointer transition-all ${paymentMethod === "card" ? "border-blue-500 bg-blue-50/30 shadow-md" : "border-transparent bg-white hover:bg-gray-50"}`}
               >
                 <div className="flex items-center gap-4">
                   <div className="w-12 h-12 bg-blue-500 rounded-xl flex items-center justify-center text-white shadow-md">
                     <CreditCard className="w-6 h-6" />
                   </div>
                   <span className="font-bold text-brand-dark text-lg">
-                    Credit / Debit Card
+                    Card Payment
                   </span>
                 </div>
                 <div
@@ -190,15 +178,10 @@ const CheckoutPage = () => {
                 </div>
               </div>
 
-              {/* 2. GCash */}
+              {/* GCash */}
               <div
                 onClick={() => setPaymentMethod("gcash")}
-                className={`p-4 rounded-2xl border-2 flex items-center justify-between cursor-pointer transition-all
-                  ${
-                    paymentMethod === "gcash"
-                      ? "border-blue-400 bg-blue-50/50 shadow-md"
-                      : "border-transparent bg-white hover:bg-gray-50"
-                  }`}
+                className={`p-4 rounded-2xl border-2 flex items-center justify-between cursor-pointer transition-all ${paymentMethod === "gcash" ? "border-blue-400 bg-blue-50/50 shadow-md" : "border-transparent bg-white hover:bg-gray-50"}`}
               >
                 <div className="flex items-center gap-4">
                   <div className="w-12 h-12 bg-[#007DFE] rounded-xl flex items-center justify-center text-white shadow-md">
@@ -217,15 +200,10 @@ const CheckoutPage = () => {
                 </div>
               </div>
 
-              {/* 3. Maya */}
+              {/* Maya */}
               <div
                 onClick={() => setPaymentMethod("maya")}
-                className={`p-4 rounded-2xl border-2 flex items-center justify-between cursor-pointer transition-all
-                  ${
-                    paymentMethod === "maya"
-                      ? "border-green-500 bg-green-50/30 shadow-md"
-                      : "border-transparent bg-white hover:bg-gray-50"
-                  }`}
+                className={`p-4 rounded-2xl border-2 flex items-center justify-between cursor-pointer transition-all ${paymentMethod === "maya" ? "border-green-500 bg-green-50/30 shadow-md" : "border-transparent bg-white hover:bg-gray-50"}`}
               >
                 <div className="flex items-center gap-4">
                   <div className="w-12 h-12 bg-black rounded-xl flex items-center justify-center text-green-400 shadow-md border border-green-500">
@@ -244,15 +222,10 @@ const CheckoutPage = () => {
                 </div>
               </div>
 
-              {/* 4. Pay at Counter */}
+              {/* Counter */}
               <div
                 onClick={() => setPaymentMethod("counter")}
-                className={`p-4 rounded-2xl border-2 flex items-center justify-between cursor-pointer transition-all
-                  ${
-                    paymentMethod === "counter"
-                      ? "border-brand-yellow bg-yellow-50/30 shadow-md"
-                      : "border-transparent bg-white hover:bg-gray-50"
-                  }`}
+                className={`p-4 rounded-2xl border-2 flex items-center justify-between cursor-pointer transition-all ${paymentMethod === "counter" ? "border-brand-yellow bg-yellow-50/30 shadow-md" : "border-transparent bg-white hover:bg-gray-50"}`}
               >
                 <div className="flex items-center gap-4">
                   <div className="w-12 h-12 bg-brand-yellow rounded-xl flex items-center justify-center text-brand-dark shadow-md">
@@ -274,20 +247,15 @@ const CheckoutPage = () => {
           </section>
         </div>
 
-        {/* Right Column: Receipt */}
+        {/* RIGHT COLUMN: Receipt Summary */}
         <div className="bg-white p-6 rounded-3xl shadow-xl border border-gray-100 h-fit sticky top-24 relative overflow-hidden">
           <div className="absolute top-0 left-0 w-full h-2 bg-brand-red opacity-10"></div>
-
           <h2 className="text-xl font-black text-brand-dark mb-6 flex items-center gap-2">
             <Receipt className="text-gray-400" /> Order Summary
           </h2>
-
           <div className="space-y-4 mb-6 max-h-64 overflow-y-auto pr-2 custom-scrollbar">
             {cart.map((item) => (
-              <div
-                key={item.id}
-                className="flex justify-between items-center group"
-              >
+              <div key={item.id} className="flex justify-between items-center">
                 <div className="flex items-center gap-3">
                   <div className="bg-gray-100 w-8 h-8 rounded-lg flex items-center justify-center font-bold text-sm text-gray-500">
                     {item.quantity}x
@@ -300,7 +268,6 @@ const CheckoutPage = () => {
               </div>
             ))}
           </div>
-
           <div className="border-t-2 border-dashed border-gray-200 py-4 space-y-2">
             <div className="flex justify-between text-gray-500 text-sm">
               <span>Subtotal</span>
@@ -311,52 +278,105 @@ const CheckoutPage = () => {
               <span>₱{tax.toFixed(2)}</span>
             </div>
           </div>
-
           <div className="bg-brand-gray p-4 rounded-xl flex justify-between items-center mb-6">
             <span className="font-bold text-gray-600">Total to Pay</span>
             <span className="text-3xl font-black text-brand-red">
               ₱{total.toFixed(2)}
             </span>
           </div>
-
           <button
             onClick={handlePayNow}
             disabled={isProcessing}
-            className="w-full bg-brand-red text-white py-5 rounded-2xl font-black text-xl shadow-lg shadow-red-200 hover:bg-red-700 hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-3"
+            className="w-full bg-brand-red text-white py-5 rounded-2xl font-black text-xl shadow-lg shadow-red-200 hover:bg-red-700 active:scale-95 transition-all disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-3"
           >
-            {isProcessing ? (
-              <>
-                <Loader2 className="w-6 h-6 animate-spin" />
-                Processing...
-              </>
-            ) : (
-              `PAY NOW`
-            )}
+            {isProcessing ? "PROCESSING..." : "PAY NOW"}
           </button>
         </div>
       </div>
 
-      {/* --- PAYMENT MODAL OVERLAY --- */}
+      {/* --- REAL WORLD PAYMENT GATEWAY MODAL --- */}
       {isProcessing && (
-        <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in">
-          <div className="bg-white rounded-3xl p-10 max-w-sm w-full text-center shadow-2xl border-4 border-gray-100">
-            {paymentStep === "processing" && (
+        <div className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4 backdrop-blur-md animate-in fade-in">
+          <div className="bg-white rounded-3xl p-8 max-w-sm w-full text-center shadow-2xl relative overflow-hidden">
+            {/* 1. INTERACTION STAGE (Scan/Tap) */}
+            {paymentStep === "awaiting_interaction" && (
+              <div className="py-4 animate-in zoom-in duration-300">
+                {/* E-WALLET FLOW */}
+                {(paymentMethod === "gcash" || paymentMethod === "maya") && (
+                  <>
+                    <h3 className="text-xl font-black text-gray-800 mb-4">
+                      Scan to Pay
+                    </h3>
+                    <div className="bg-gray-900 p-4 rounded-xl inline-block mb-4 shadow-inner relative">
+                      {/* Simulated QR Code */}
+                      <ScanLine className="text-white w-32 h-32 animate-pulse" />
+                      <div className="absolute inset-0 border-2 border-white/20 rounded-xl"></div>
+                    </div>
+                    <p className="text-gray-500 font-bold mb-2">
+                      Total: ₱{total.toFixed(2)}
+                    </p>
+                    <p className="text-xs text-gray-400">
+                      Open your {paymentMethod === "gcash" ? "GCash" : "Maya"}{" "}
+                      app and scan this QR code.
+                    </p>
+                  </>
+                )}
+
+                {/* CARD FLOW */}
+                {paymentMethod === "card" && (
+                  <>
+                    <h3 className="text-xl font-black text-gray-800 mb-4">
+                      Follow Terminal
+                    </h3>
+                    <div className="bg-blue-50 p-6 rounded-full inline-block mb-6 animate-pulse">
+                      <Wifi className="text-blue-500 w-16 h-16" />
+                    </div>
+                    <p className="text-gray-600 font-bold mb-2">
+                      Tap or Insert Card
+                    </p>
+                    <p className="text-xs text-gray-400">
+                      Please follow instructions on the pin pad.
+                    </p>
+                  </>
+                )}
+
+                {/* COUNTER FLOW */}
+                {paymentMethod === "counter" && (
+                  <>
+                    <h3 className="text-xl font-black text-gray-800 mb-4">
+                      Printing Ticket
+                    </h3>
+                    <div className="bg-yellow-50 p-6 rounded-full inline-block mb-6">
+                      <Receipt className="text-brand-yellow w-16 h-16 animate-bounce" />
+                    </div>
+                    <p className="text-gray-600 font-bold mb-2">
+                      Please Wait...
+                    </p>
+                    <p className="text-xs text-gray-400">
+                      We are generating your queue ticket.
+                    </p>
+                  </>
+                )}
+              </div>
+            )}
+
+            {/* 2. PROCESSING STAGE */}
+            {paymentStep === "processing_payment" && (
               <div className="py-8 flex flex-col items-center">
                 <Loader2
                   size={64}
-                  className="text-brand-yellow animate-spin mb-8"
+                  className="text-brand-yellow animate-spin mb-6"
                 />
                 <h3 className="text-2xl font-black text-gray-800 mb-2">
-                  Processing...
+                  Verifying...
                 </h3>
                 <p className="text-gray-500 font-medium">
-                  {paymentMethod === "counter"
-                    ? "Printing Ticket..."
-                    : "Connecting to Bank..."}
+                  Communicating with bank...
                 </p>
               </div>
             )}
 
+            {/* 3. SUCCESS STAGE */}
             {paymentStep === "approved" && (
               <div className="py-8 flex flex-col items-center animate-in zoom-in duration-300">
                 <div className="w-24 h-24 bg-green-100 rounded-full flex items-center justify-center mb-6 text-green-600 shadow-lg shadow-green-100">
@@ -367,7 +387,7 @@ const CheckoutPage = () => {
                     ? "Ticket Printed!"
                     : "Payment Approved!"}
                 </h3>
-                <p className="text-gray-500 font-medium">Redirecting...</p>
+                <p className="text-gray-500 font-medium">Redirecting you...</p>
               </div>
             )}
           </div>
